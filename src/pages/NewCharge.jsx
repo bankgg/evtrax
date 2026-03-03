@@ -16,10 +16,12 @@ import {
     HomeOutlined,
     EnvironmentOutlined,
     SaveOutlined,
+    SyncOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { syncManager } from '../lib/syncManager'
 import { db } from '../lib/db'
+import LocationPicker from '../components/LocationPicker'
 
 const { Title, Text } = Typography
 const BATTERY_KWH = 58.9
@@ -32,6 +34,26 @@ export default function NewCharge({ editSessionId, onDone }) {
     const [messageApi, contextHolder] = message.useMessage()
     const [pastLocations, setPastLocations] = useState([])
     const [pastProviders, setPastProviders] = useState([])
+    const [geoCoords, setGeoCoords] = useState(null)
+    const [geoStatus, setGeoStatus] = useState('idle') // idle | loading | done | error
+    const [showMapPicker, setShowMapPicker] = useState(false)
+
+    // Auto-capture GPS on mount (unless editing with existing coords)
+    const captureLocation = () => {
+        setGeoStatus('loading')
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                setGeoCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+                setGeoStatus('done')
+            },
+            () => setGeoStatus('error'),
+            { enableHighAccuracy: true, timeout: 10000 }
+        )
+    }
+
+    useEffect(() => {
+        if (!editSessionId) captureLocation()
+    }, [])
 
     // Load past locations & providers for autocomplete
     useEffect(() => {
@@ -49,6 +71,10 @@ export default function NewCharge({ editSessionId, onDone }) {
                 if (session) {
                     setIsEditing(true)
                     setChargingType(session.charging_type)
+                    if (session.lat && session.lng) {
+                        setGeoCoords({ lat: session.lat, lng: session.lng })
+                        setGeoStatus('done')
+                    }
                     form.setFieldsValue({
                         ...session,
                         started_at: session.started_at ? dayjs(session.started_at) : null,
@@ -76,6 +102,8 @@ export default function NewCharge({ editSessionId, onDone }) {
                 price_per_kwh: values.price_per_kwh ?? null,
                 total_cost: values.total_cost ?? null,
                 odometer_km: values.odometer_km ?? null,
+                lat: geoCoords?.lat ?? null,
+                lng: geoCoords?.lng ?? null,
                 note: values.note || null,
             }
 
@@ -119,238 +147,284 @@ export default function NewCharge({ editSessionId, onDone }) {
     }
 
     return (
-        <div className="page-container">
-            {contextHolder}
-            <div className="page-header">
-                <Title level={4} style={{ margin: 0, color: 'var(--text-primary)' }}>
-                    {isEditing ? '✏️ Edit Session' : '⚡ New Charge'}
-                </Title>
-            </div>
+        <>
+            <div className="page-container">
+                {contextHolder}
 
-            <Form
-                form={form}
-                layout="vertical"
-                onFinish={handleSubmit}
-                initialValues={{
-                    started_at: dayjs(),
-                }}
-                className="charge-form"
-            >
-                {/* Charging Type */}
-                <Form.Item label="Charging Type">
-                    <Segmented
-                        value={chargingType}
-                        onChange={setChargingType}
-                        block
-                        options={[
-                            {
-                                label: (
-                                    <span>
-                                        <ThunderboltOutlined /> DC Station
-                                    </span>
-                                ),
-                                value: 'dc',
-                            },
-                            {
-                                label: (
-                                    <span>
-                                        <HomeOutlined /> AC Home
-                                    </span>
-                                ),
-                                value: 'ac',
-                            },
-                        ]}
-                        className="charging-type-toggle"
-                    />
-                </Form.Item>
+                <div className="page-header">
+                    <Title level={4} style={{ margin: 0, color: 'var(--text-primary)' }}>
+                        {isEditing ? '✏️ Edit Session' : '⚡ New Charge'}
+                    </Title>
+                </div>
 
-                {/* When */}
-                <Card
-                    size="small"
-                    className="form-section-card"
-                    title="When"
+                <Form
+                    form={form}
+                    layout="vertical"
+                    onFinish={handleSubmit}
+                    initialValues={{
+                        started_at: dayjs(),
+                    }}
+                    className="charge-form"
                 >
-                    <Form.Item
-                        name="started_at"
-                        label="Start Time"
-                        rules={[{ required: true, message: 'Required' }]}
+                    {/* Charging Type */}
+                    <Form.Item label="Charging Type">
+                        <Segmented
+                            value={chargingType}
+                            onChange={setChargingType}
+                            block
+                            options={[
+                                {
+                                    label: (
+                                        <span>
+                                            <ThunderboltOutlined /> DC Station
+                                        </span>
+                                    ),
+                                    value: 'dc',
+                                },
+                                {
+                                    label: (
+                                        <span>
+                                            <HomeOutlined /> AC Home
+                                        </span>
+                                    ),
+                                    value: 'ac',
+                                },
+                            ]}
+                            className="charging-type-toggle"
+                        />
+                    </Form.Item>
+
+                    {/* When */}
+                    <Card
+                        size="small"
+                        className="form-section-card"
+                        title="When"
                     >
-                        <DatePicker
-                            showTime
-                            format="D MMM YYYY · HH:mm"
-                            style={{ width: '100%' }}
-                            size="large"
-                        />
-                    </Form.Item>
+                        <Form.Item
+                            name="started_at"
+                            label="Start Time"
+                            rules={[{ required: true, message: 'Required' }]}
+                        >
+                            <DatePicker
+                                showTime
+                                format="D MMM YYYY · HH:mm"
+                                style={{ width: '100%' }}
+                                size="large"
+                            />
+                        </Form.Item>
 
-                    <Form.Item name="ended_at" label="End Time">
-                        <DatePicker
-                            showTime
-                            format="D MMM YYYY · HH:mm"
-                            style={{ width: '100%' }}
-                            size="large"
-                            placeholder="Fill later when done"
-                        />
-                    </Form.Item>
-                </Card>
+                        <Form.Item name="ended_at" label="End Time">
+                            <DatePicker
+                                showTime
+                                format="D MMM YYYY · HH:mm"
+                                style={{ width: '100%' }}
+                                size="large"
+                                placeholder="Fill later when done"
+                            />
+                        </Form.Item>
+                    </Card>
 
-                {/* Where */}
-                <Card
-                    size="small"
-                    className="form-section-card"
-                    title="Where"
-                >
-                    <Form.Item name="location" label="Location">
-                        <AutoComplete
-                            options={pastLocations.map((l) => ({ value: l }))}
-                            placeholder={chargingType === 'ac' ? 'Home' : 'Station name'}
-                            size="large"
-                            filterOption={(input, option) =>
-                                (option?.value ?? '').toLowerCase().includes(input.toLowerCase())
-                            }
-                        />
-                    </Form.Item>
-
-                    {chargingType === 'dc' && (
-                        <Form.Item name="provider" label="Provider / Network">
+                    {/* Where */}
+                    <Card
+                        size="small"
+                        className="form-section-card"
+                        title={
+                            <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                Where
+                                <Text type="secondary" style={{ fontSize: 12, fontWeight: 400, cursor: 'pointer' }}>
+                                    {geoStatus === 'loading' && '📍 Locating...'}
+                                    {
+                                        geoStatus === 'done' && (
+                                            <span onClick={() => setShowMapPicker(true)}>
+                                                📍 {geoCoords.lat.toFixed(4)}, {geoCoords.lng.toFixed(4)}{' '}
+                                                <EnvironmentOutlined style={{ marginLeft: 4 }} />
+                                            </span>
+                                        )
+                                    }
+                                    {
+                                        geoStatus === 'error' && (
+                                            <span onClick={() => setShowMapPicker(true)} style={{ color: '#ff7875' }}>
+                                                📍 Pick location
+                                            </span>
+                                        )
+                                    }
+                                    {
+                                        geoStatus === 'idle' && (
+                                            <span onClick={() => setShowMapPicker(true)}>
+                                                📍 Pick location
+                                            </span>
+                                        )
+                                    }
+                                </Text>
+                            </span>
+                        }
+                    >
+                        <Form.Item name="location" label="Location">
                             <AutoComplete
-                                options={pastProviders.map((p) => ({ value: p }))}
-                                placeholder="e.g. PEA VOLTA, EA Anywhere"
+                                options={pastLocations.map((l) => ({ value: l }))}
+                                placeholder={chargingType === 'ac' ? 'Home' : 'Station name'}
                                 size="large"
                                 filterOption={(input, option) =>
                                     (option?.value ?? '').toLowerCase().includes(input.toLowerCase())
                                 }
                             />
                         </Form.Item>
-                    )}
-                </Card>
 
-                {/* Car */}
-                <Card
-                    size="small"
-                    className="form-section-card"
-                    title="Car"
-                >
-                    <Form.Item
-                        name="odometer_km"
-                        label="Odometer (km)"
-                        extra="Enables km driven, efficiency & cost/km stats"
+                        {
+                            chargingType === 'dc' && (
+                                <Form.Item name="provider" label="Provider / Network">
+                                    <AutoComplete
+                                        options={pastProviders.map((p) => ({ value: p }))}
+                                        placeholder="e.g. PEA VOLTA, EA Anywhere"
+                                        size="large"
+                                        filterOption={(input, option) =>
+                                            (option?.value ?? '').toLowerCase().includes(input.toLowerCase())
+                                        }
+                                    />
+                                </Form.Item>
+                            )
+                        }
+                    </Card>
+
+                    {/* Car */}
+                    <Card
+                        size="small"
+                        className="form-section-card"
+                        title="Car"
                     >
-                        <InputNumber
-                            min={0}
-                            step={1}
-                            placeholder="e.g. 1250"
-                            style={{ width: '100%' }}
-                            size="large"
-                        />
-                    </Form.Item>
-                </Card>
-
-                {/* Battery */}
-                <Card
-                    size="small"
-                    className="form-section-card"
-                    title="Battery"
-                >
-                    <Form.Item name="start_soc_pct" label="Start SoC (%)">
-                        <InputNumber
-                            min={0}
-                            max={100}
-                            placeholder="e.g. 20"
-                            style={{ width: '100%' }}
-                            size="large"
-                        />
-                    </Form.Item>
-
-                    <Form.Item name="end_soc_pct" label="End SoC (%)">
-                        <InputNumber
-                            min={0}
-                            max={100}
-                            placeholder="e.g. 80"
-                            style={{ width: '100%' }}
-                            size="large"
-                        />
-                    </Form.Item>
-
-                    <Form.Item
-                        name="energy_kwh"
-                        label="Energy Charged (kWh)"
-                        extra="From charger display, or auto-calculated from SoC"
-                    >
-                        <InputNumber
-                            min={0}
-                            max={BATTERY_KWH}
-                            step={0.1}
-                            placeholder="e.g. 35.2"
-                            style={{ width: '100%' }}
-                            size="large"
-                        />
-                    </Form.Item>
-                </Card>
-
-                {/* Cost */}
-                <Card
-                    size="small"
-                    className="form-section-card"
-                    title="Cost"
-                >
-                    {chargingType === 'dc' && (
                         <Form.Item
-                            name="price_per_kwh"
-                            label="Price per kWh (฿)"
+                            name="odometer_km"
+                            label="Odometer (km)"
+                            extra="Enables km driven, efficiency & cost/km stats"
                         >
                             <InputNumber
                                 min={0}
-                                step={0.5}
-                                placeholder="e.g. 7.50"
+                                step={1}
+                                placeholder="e.g. 1250"
                                 style={{ width: '100%' }}
                                 size="large"
                             />
                         </Form.Item>
-                    )}
+                    </Card>
 
-                    <Form.Item
-                        name="total_cost"
-                        label="Total Cost (฿)"
-                        extra={
-                            chargingType === 'dc'
-                                ? 'Auto-calculated if energy & price are filled'
-                                : 'From your electricity bill or meter'
-                        }
+                    {/* Battery */}
+                    <Card
+                        size="small"
+                        className="form-section-card"
+                        title="Battery"
                     >
-                        <InputNumber
-                            min={0}
-                            step={1}
-                            placeholder="e.g. 264.00"
-                            style={{ width: '100%' }}
+                        <Form.Item name="start_soc_pct" label="Start SoC (%)">
+                            <InputNumber
+                                min={0}
+                                max={100}
+                                placeholder="e.g. 20"
+                                style={{ width: '100%' }}
+                                size="large"
+                            />
+                        </Form.Item>
+
+                        <Form.Item name="end_soc_pct" label="End SoC (%)">
+                            <InputNumber
+                                min={0}
+                                max={100}
+                                placeholder="e.g. 80"
+                                style={{ width: '100%' }}
+                                size="large"
+                            />
+                        </Form.Item>
+
+                        <Form.Item
+                            name="energy_kwh"
+                            label="Energy Charged (kWh)"
+                            extra="From charger display, or auto-calculated from SoC"
+                        >
+                            <InputNumber
+                                min={0}
+                                max={BATTERY_KWH}
+                                step={0.1}
+                                placeholder="e.g. 35.2"
+                                style={{ width: '100%' }}
+                                size="large"
+                            />
+                        </Form.Item>
+                    </Card>
+
+                    {/* Cost */}
+                    <Card
+                        size="small"
+                        className="form-section-card"
+                        title="Cost"
+                    >
+                        {chargingType === 'dc' && (
+                            <Form.Item
+                                name="price_per_kwh"
+                                label="Price per kWh (฿)"
+                            >
+                                <InputNumber
+                                    min={0}
+                                    step={0.5}
+                                    placeholder="e.g. 7.50"
+                                    style={{ width: '100%' }}
+                                    size="large"
+                                />
+                            </Form.Item>
+                        )}
+
+                        <Form.Item
+                            name="total_cost"
+                            label="Total Cost (฿)"
+                            extra={
+                                chargingType === 'dc'
+                                    ? 'Auto-calculated if energy & price are filled'
+                                    : 'From your electricity bill or meter'
+                            }
+                        >
+                            <InputNumber
+                                min={0}
+                                step={1}
+                                placeholder="e.g. 264.00"
+                                style={{ width: '100%' }}
+                                size="large"
+                            />
+                        </Form.Item>
+                    </Card>
+
+                    {/* Note */}
+                    <Form.Item name="note" label="Note">
+                        <Input.TextArea
+                            rows={2}
+                            placeholder="Anything to remember…"
                             size="large"
                         />
                     </Form.Item>
-                </Card>
 
-                {/* Note */}
-                <Form.Item name="note" label="Note">
-                    <Input.TextArea
-                        rows={2}
-                        placeholder="Anything to remember…"
-                        size="large"
-                    />
-                </Form.Item>
+                    <Form.Item>
+                        <Button
+                            type="primary"
+                            htmlType="submit"
+                            icon={<SaveOutlined />}
+                            loading={saving}
+                            block
+                            size="large"
+                            className="save-btn"
+                        >
+                            {isEditing ? 'Update Session' : 'Save Charging Session'}
+                        </Button>
+                    </Form.Item>
+                </Form>
+            </div>
 
-                <Form.Item>
-                    <Button
-                        type="primary"
-                        htmlType="submit"
-                        icon={<SaveOutlined />}
-                        loading={saving}
-                        block
-                        size="large"
-                        className="save-btn"
-                    >
-                        {isEditing ? 'Update Session' : 'Save Charging Session'}
-                    </Button>
-                </Form.Item>
-            </Form>
-        </div>
+            {showMapPicker && (
+                <LocationPicker
+                    initialCoords={geoCoords}
+                    onConfirm={(coords) => {
+                        setGeoCoords(coords)
+                        setGeoStatus('done')
+                        setShowMapPicker(false)
+                    }}
+                    onCancel={() => setShowMapPicker(false)}
+                />
+            )}
+        </>
     )
 }

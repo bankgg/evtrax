@@ -15,7 +15,6 @@ import { syncManager } from '../lib/syncManager'
 dayjs.extend(duration)
 
 const { Title, Text } = Typography
-const { RangePicker } = DatePicker
 
 function formatDuration(startedAt, endedAt) {
     const start = dayjs(startedAt)
@@ -27,14 +26,13 @@ function formatDuration(startedAt, endedAt) {
     return `${minutes}m`
 }
 
-const RANGE_OPTIONS = ['Month', 'Prev', '3M', 'Custom', 'All']
+const RANGE_OPTIONS = ['Month', 'Prev', 'Custom', 'All']
 
 function getDateRange(preset) {
     const now = dayjs()
     switch (preset) {
         case 'Month': return [now.startOf('month'), now.endOf('month')]
         case 'Prev': return [now.subtract(1, 'month').startOf('month'), now.subtract(1, 'month').endOf('month')]
-        case '3M': return [now.subtract(3, 'month').startOf('month'), now.endOf('month')]
         default: return null
     }
 }
@@ -44,6 +42,14 @@ export default function History({ onEdit }) {
     const [search, setSearch] = useState('')
     const [rangePreset, setRangePreset] = useState(() => localStorage.getItem('evtrax_range') || 'Month')
     const [customRange, setCustomRange] = useState(null)
+    const [rangeOpen, setRangeOpen] = useState(false)
+
+    const handleCustomChange = (dates) => {
+        setCustomRange(dates)
+        if (dates && dates[0] && dates[1]) {
+            setRangeOpen(false)
+        }
+    }
 
     const handleRangeChange = (val) => {
         setRangePreset(val)
@@ -106,11 +112,14 @@ export default function History({ onEdit }) {
             />
 
             {rangePreset === 'Custom' && (
-                <RangePicker
+                <DatePicker.RangePicker
                     value={customRange}
-                    onChange={setCustomRange}
+                    onChange={handleCustomChange}
+                    open={rangeOpen}
+                    onOpenChange={setRangeOpen}
                     style={{ width: '100%', marginBottom: 8 }}
                     size="large"
+                    popupClassName="single-panel-range"
                 />
             )}
 

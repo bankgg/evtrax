@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Card, Statistic, Row, Col, Tag, Empty, Typography, Divider, Spin, Segmented, DatePicker } from 'antd'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import {
     ThunderboltOutlined,
     DollarOutlined,
@@ -11,17 +12,15 @@ import dayjs from 'dayjs'
 import { useSessions } from '../hooks/useSessions'
 
 const { Title, Text } = Typography
-const { RangePicker } = DatePicker
 const BATTERY_KWH = 58.9
 
-const RANGE_OPTIONS = ['Month', 'Prev', '3M', 'Custom', 'All']
+const RANGE_OPTIONS = ['Month', 'Prev', 'Custom', 'All']
 
 function getDateRange(preset) {
     const now = dayjs()
     switch (preset) {
         case 'Month': return [now.startOf('month'), now.endOf('month')]
         case 'Prev': return [now.subtract(1, 'month').startOf('month'), now.subtract(1, 'month').endOf('month')]
-        case '3M': return [now.subtract(3, 'month').startOf('month'), now.endOf('month')]
         default: return null
     }
 }
@@ -30,6 +29,14 @@ export default function Dashboard() {
     const { sessions, loading } = useSessions()
     const [rangePreset, setRangePreset] = useState(() => localStorage.getItem('evtrax_range') || 'Month')
     const [customRange, setCustomRange] = useState(null)
+    const [rangeOpen, setRangeOpen] = useState(false)
+
+    const handleCustomChange = (dates) => {
+        setCustomRange(dates)
+        if (dates && dates[0] && dates[1]) {
+            setRangeOpen(false)
+        }
+    }
 
     const handleRangeChange = (val) => {
         setRangePreset(val)
@@ -47,6 +54,37 @@ export default function Dashboard() {
         return sessions.filter((s) => {
             const d = dayjs(s.started_at)
             return d.isAfter(start.startOf('day')) && d.isBefore(end.endOf('day'))
+        })
+    }, [sessions, dateRange])
+
+    const chartData = useMemo(() => {
+        const sorted = [...sessions].sort((a, b) => new Date(a.started_at) - new Date(b.started_at))
+        const data = []
+        let prevOdo = null
+
+        sorted.forEach((s) => {
+            const currentOdo = Number(s.odometer_km)
+            const energy = Number(s.energy_kwh)
+
+            if (currentOdo > 0 && energy > 0) {
+                if (prevOdo != null && currentOdo > prevOdo) {
+                    const distance = currentOdo - prevOdo
+                    const efficiency = (energy / distance) * 100
+                    data.push({
+                        date: s.started_at,
+                        efficiency: Number(efficiency.toFixed(1)),
+                        formattedDate: dayjs(s.started_at).format('MMM D'),
+                    })
+                }
+                prevOdo = currentOdo
+            }
+        })
+
+        if (!dateRange || !dateRange[0] || !dateRange[1]) return data
+        const [start, end] = dateRange
+        return data.filter((d) => {
+            const dt = dayjs(d.date)
+            return dt.isAfter(start.startOf('day')) && dt.isBefore(end.endOf('day'))
         })
     }, [sessions, dateRange])
 
@@ -117,11 +155,14 @@ export default function Dashboard() {
             />
 
             {rangePreset === 'Custom' && (
-                <RangePicker
+                <DatePicker.RangePicker
                     value={customRange}
-                    onChange={setCustomRange}
+                    onChange={handleCustomChange}
+                    open={rangeOpen}
+                    onOpenChange={setRangeOpen}
                     style={{ width: '100%', marginBottom: 16 }}
                     size="large"
+                    popupClassName="single-panel-range"
                 />
             )}
 
@@ -222,6 +263,55 @@ export default function Dashboard() {
                                     </Card>
                                 </Col>
                             </Row>
+                        </div>
+                    )}
+
+                    {/* Efficiency Chart */}
+                    {chartData.length > 0 && (
+                        <div className="stats-section" style={{ marginTop: 24, marginBottom: 24 }}>
+                            <Text className="section-label">Efficiency Trend</Text>
+                            <Card size="small" style={{ paddingTop: 24, paddingRight: 24 }}>
+                                <div style={{ width: '100%', height: 250 }}>
+                                    <ResponsiveContainer>
+                                        <LineChart data={chartData}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
+                                            <XAxis
+                                                dataKey="formattedDate"
+                                                tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
+                                                tickLine={false}
+                                                axisLine={false}
+                                                minTickGap={20}
+                                            />
+                                            <YAxis
+                                                domain={['auto', 'auto']}
+                                                tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
+                                                tickLine={false}
+                                                axisLine={false}
+                                                width={40}
+                                            />
+                                            <Tooltip
+                                                contentStyle={{
+                                                    backgroundColor: 'var(--bg-elevated)',
+                                                    borderColor: 'var(--border-color)',
+                                                    borderRadius: 8,
+                                                    color: 'var(--text-primary)'
+                                                }}
+                                                itemStyle={{ color: '#1890ff' }}
+                                                formatter={(value) => [`${value} kWh/100km`, 'Efficiency']}
+                                            />
+                                            <Line
+                                                type="monotone"
+                                                dataKey="efficiency"
+                                                stroke="#1890ff"
+                                                strokeWidth={3}
+                                                dot={{ fill: '#1890ff', strokeWidth: 2, r: 4 }}
+                                                activeDot={{ r: 6 }}
+                                                animationDuration={1500}
+                                            />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </Card>
                         </div>
                     )}
 

@@ -4,10 +4,12 @@ import {
   DashboardOutlined,
   PlusCircleOutlined,
   UnorderedListOutlined,
+  EnvironmentOutlined,
 } from '@ant-design/icons'
 import Dashboard from './pages/Dashboard'
 import NewCharge from './pages/NewCharge'
 import History from './pages/History'
+import ChargingMap from './pages/ChargingMap'
 import SyncStatusBar from './components/SyncStatusBar'
 import './App.css'
 
@@ -15,6 +17,7 @@ const tabs = [
   { key: 'dashboard', label: 'Dashboard', icon: <DashboardOutlined /> },
   { key: 'new', label: 'Charge', icon: <PlusCircleOutlined /> },
   { key: 'history', label: 'History', icon: <UnorderedListOutlined /> },
+  { key: 'map', label: 'Map', icon: <EnvironmentOutlined /> },
 ]
 
 export default function App() {
@@ -85,6 +88,7 @@ export default function App() {
             />
           )}
           {activeTab === 'history' && <History onEdit={handleEdit} />}
+          {activeTab === 'map' && <ChargingMap />}
         </main>
 
         <nav className="bottom-nav">

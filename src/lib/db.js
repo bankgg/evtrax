@@ -13,3 +13,7 @@ db.version(2).stores({
     'id, charging_type, started_at, ended_at, location, provider, start_soc_pct, end_soc_pct, energy_kwh, price_per_kwh, total_cost, odometer_km, note, created_at, updated_at',
 })
 
+db.version(3).stores({
+  sessions:
+    'id, charging_type, started_at, ended_at, location, provider, start_soc_pct, end_soc_pct, energy_kwh, price_per_kwh, total_cost, odometer_km, lat, lng, note, created_at, updated_at',
+})

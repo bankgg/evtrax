@@ -392,3 +392,42 @@ body {
     font-size: 18px !important;
   }
 }
+
+/* ── Single-panel RangePicker for mobile ────────────────── */
+
+.single-panel-range .ant-picker-panels > *:nth-child(2) {
+  display: none !important;
+}
+
+.single-panel-range .ant-picker-header-next-btn,
+.single-panel-range .ant-picker-header-super-next-btn {
+  visibility: visible !important;
+}
+
+/* ── Leaflet map overrides ─────────────────────────────── */
+
+.leaflet-popup-content-wrapper {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  border-radius: 10px;
+}
+
+.leaflet-popup-tip {
+  background: var(--bg-card);
+}
+
+/* Hide default leaflet marker and shadows in LocationPicker */
+.location-picker-map .leaflet-marker-icon,
+.location-picker-map .leaflet-marker-shadow {
+  display: none !important;
+}
+
+.leaflet-popup-content {
+  margin: 10px 14px;
+  line-height: 1.6;
+}
+
+.custom-marker {
+  background: none !important;
+  border: none !important;
+}
