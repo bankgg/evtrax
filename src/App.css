@@ -231,6 +231,20 @@ body {
   color: var(--text-secondary);
 }
 
+.form-section-card .ant-input-number,
+.form-section-card .ant-input-number-input,
+.form-section-card .ant-input-number-outlined,
+.form-section-card .ant-picker,
+.form-section-card .ant-picker-outlined,
+.form-section-card .ant-input,
+.form-section-card .ant-input-outlined,
+.form-section-card .ant-select-selector,
+.form-section-card .ant-input-affix-wrapper,
+.form-section-card .ant-input-textarea textarea {
+  background: #2a2a3e !important;
+  background-color: #2a2a3e !important;
+}
+
 .charging-type-toggle {
   font-weight: 600 !important;
 }

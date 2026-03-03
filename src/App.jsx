@@ -55,13 +55,16 @@ export default function App() {
             colorBgContainer: '#1a1a2e',
           },
           Input: {
-            colorBgContainer: '#1a1a2e',
+            colorBgContainer: '#2a2a3e',
           },
           InputNumber: {
-            colorBgContainer: '#1a1a2e',
+            colorBgContainer: '#2a2a3e',
           },
           DatePicker: {
-            colorBgContainer: '#1a1a2e',
+            colorBgContainer: '#2a2a3e',
+          },
+          Select: {
+            colorBgContainer: '#2a2a3e',
           },
           Segmented: {
             itemSelectedBg: '#00b96b',

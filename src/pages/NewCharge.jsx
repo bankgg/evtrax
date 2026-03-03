@@ -1,17 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
     Form,
     InputNumber,
     Input,
     Button,
     Segmented,
-    Slider,
+    AutoComplete,
     DatePicker,
     Typography,
     message,
     Card,
-    Space,
-    Divider,
 } from 'antd'
 import {
     ThunderboltOutlined,
@@ -32,6 +30,18 @@ export default function NewCharge({ editSessionId, onDone }) {
     const [saving, setSaving] = useState(false)
     const [isEditing, setIsEditing] = useState(false)
     const [messageApi, contextHolder] = message.useMessage()
+    const [pastLocations, setPastLocations] = useState([])
+    const [pastProviders, setPastProviders] = useState([])
+
+    // Load past locations & providers for autocomplete
+    useEffect(() => {
+        db.sessions.toArray().then((sessions) => {
+            const locs = [...new Set(sessions.map((s) => s.location).filter(Boolean))]
+            const provs = [...new Set(sessions.map((s) => s.provider).filter(Boolean))]
+            setPastLocations(locs)
+            setPastProviders(provs)
+        })
+    }, [])
 
     useEffect(() => {
         if (editSessionId) {
@@ -65,6 +75,7 @@ export default function NewCharge({ editSessionId, onDone }) {
                 energy_kwh: values.energy_kwh ?? null,
                 price_per_kwh: values.price_per_kwh ?? null,
                 total_cost: values.total_cost ?? null,
+                odometer_km: values.odometer_km ?? null,
                 note: values.note || null,
             }
 
@@ -114,7 +125,6 @@ export default function NewCharge({ editSessionId, onDone }) {
                 <Title level={4} style={{ margin: 0, color: 'var(--text-primary)' }}>
                     {isEditing ? '✏️ Edit Session' : '⚡ New Charge'}
                 </Title>
-                <Text type="secondary">Fill what you know now, edit later</Text>
             </div>
 
             <Form
@@ -191,18 +201,49 @@ export default function NewCharge({ editSessionId, onDone }) {
                     title="Where"
                 >
                     <Form.Item name="location" label="Location">
-                        <Input
-                            prefix={<EnvironmentOutlined />}
+                        <AutoComplete
+                            options={pastLocations.map((l) => ({ value: l }))}
                             placeholder={chargingType === 'ac' ? 'Home' : 'Station name'}
                             size="large"
+                            filterOption={(input, option) =>
+                                (option?.value ?? '').toLowerCase().includes(input.toLowerCase())
+                            }
                         />
                     </Form.Item>
 
                     {chargingType === 'dc' && (
                         <Form.Item name="provider" label="Provider / Network">
-                            <Input placeholder="e.g. PEA VOLTA, EA Anywhere" size="large" />
+                            <AutoComplete
+                                options={pastProviders.map((p) => ({ value: p }))}
+                                placeholder="e.g. PEA VOLTA, EA Anywhere"
+                                size="large"
+                                filterOption={(input, option) =>
+                                    (option?.value ?? '').toLowerCase().includes(input.toLowerCase())
+                                }
+                            />
                         </Form.Item>
                     )}
+                </Card>
+
+                {/* Car */}
+                <Card
+                    size="small"
+                    className="form-section-card"
+                    title="Car"
+                >
+                    <Form.Item
+                        name="odometer_km"
+                        label="Odometer (km)"
+                        extra="Enables km driven, efficiency & cost/km stats"
+                    >
+                        <InputNumber
+                            min={0}
+                            step={1}
+                            placeholder="e.g. 1250"
+                            style={{ width: '100%' }}
+                            size="large"
+                        />
+                    </Form.Item>
                 </Card>
 
                 {/* Battery */}
@@ -212,20 +253,22 @@ export default function NewCharge({ editSessionId, onDone }) {
                     title="Battery"
                 >
                     <Form.Item name="start_soc_pct" label="Start SoC (%)">
-                        <Slider
+                        <InputNumber
                             min={0}
                             max={100}
-                            marks={{ 0: '0%', 20: '20', 50: '50', 80: '80', 100: '100%' }}
-                            tooltip={{ formatter: (v) => `${v}%` }}
+                            placeholder="e.g. 20"
+                            style={{ width: '100%' }}
+                            size="large"
                         />
                     </Form.Item>
 
                     <Form.Item name="end_soc_pct" label="End SoC (%)">
-                        <Slider
+                        <InputNumber
                             min={0}
                             max={100}
-                            marks={{ 0: '0%', 20: '20', 50: '50', 80: '80', 100: '100%' }}
-                            tooltip={{ formatter: (v) => `${v}%` }}
+                            placeholder="e.g. 80"
+                            style={{ width: '100%' }}
+                            size="large"
                         />
                     </Form.Item>
 
@@ -241,7 +284,6 @@ export default function NewCharge({ editSessionId, onDone }) {
                             placeholder="e.g. 35.2"
                             style={{ width: '100%' }}
                             size="large"
-                            addonAfter="kWh"
                         />
                     </Form.Item>
                 </Card>
@@ -255,7 +297,7 @@ export default function NewCharge({ editSessionId, onDone }) {
                     {chargingType === 'dc' && (
                         <Form.Item
                             name="price_per_kwh"
-                            label="Price per kWh"
+                            label="Price per kWh (฿)"
                         >
                             <InputNumber
                                 min={0}
@@ -263,15 +305,13 @@ export default function NewCharge({ editSessionId, onDone }) {
                                 placeholder="e.g. 7.50"
                                 style={{ width: '100%' }}
                                 size="large"
-                                addonBefore="฿"
-                                addonAfter="/kWh"
                             />
                         </Form.Item>
                     )}
 
                     <Form.Item
                         name="total_cost"
-                        label="Total Cost"
+                        label="Total Cost (฿)"
                         extra={
                             chargingType === 'dc'
                                 ? 'Auto-calculated if energy & price are filled'
@@ -284,7 +324,6 @@ export default function NewCharge({ editSessionId, onDone }) {
                             placeholder="e.g. 264.00"
                             style={{ width: '100%' }}
                             size="large"
-                            addonBefore="฿"
                         />
                     </Form.Item>
                 </Card>

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Tag, Typography, Empty, Input, Button, Popconfirm, Spin, message } from 'antd'
+import { useState, useMemo } from 'react'
+import { Tag, Typography, Empty, Input, Button, Popconfirm, Spin, Segmented, DatePicker, message } from 'antd'
 import {
     SearchOutlined,
     DeleteOutlined,
@@ -8,26 +8,79 @@ import {
     ClockCircleOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
+import duration from 'dayjs/plugin/duration'
 import { useSessions } from '../hooks/useSessions'
 import { syncManager } from '../lib/syncManager'
 
+dayjs.extend(duration)
+
 const { Title, Text } = Typography
+const { RangePicker } = DatePicker
+
+function formatDuration(startedAt, endedAt) {
+    const start = dayjs(startedAt)
+    const end = dayjs(endedAt)
+    const diff = dayjs.duration(end.diff(start))
+    const hours = Math.floor(diff.asHours())
+    const minutes = diff.minutes()
+    if (hours > 0) return `${hours}h ${minutes}m`
+    return `${minutes}m`
+}
+
+const RANGE_OPTIONS = ['Month', 'Prev', '3M', 'Custom', 'All']
+
+function getDateRange(preset) {
+    const now = dayjs()
+    switch (preset) {
+        case 'Month': return [now.startOf('month'), now.endOf('month')]
+        case 'Prev': return [now.subtract(1, 'month').startOf('month'), now.subtract(1, 'month').endOf('month')]
+        case '3M': return [now.subtract(3, 'month').startOf('month'), now.endOf('month')]
+        default: return null
+    }
+}
 
 export default function History({ onEdit }) {
     const { sessions, loading } = useSessions()
     const [search, setSearch] = useState('')
+    const [rangePreset, setRangePreset] = useState(() => localStorage.getItem('evtrax_range') || 'Month')
+    const [customRange, setCustomRange] = useState(null)
+
+    const handleRangeChange = (val) => {
+        setRangePreset(val)
+        localStorage.setItem('evtrax_range', val)
+    }
+
+    const dateRange = useMemo(() => {
+        if (rangePreset === 'Custom') return customRange
+        return getDateRange(rangePreset)
+    }, [rangePreset, customRange])
     const [messageApi, contextHolder] = message.useMessage()
 
-    const filtered = sessions.filter((s) => {
-        if (!search) return true
-        const q = search.toLowerCase()
-        return (
-            (s.location || '').toLowerCase().includes(q) ||
-            (s.provider || '').toLowerCase().includes(q) ||
-            (s.note || '').toLowerCase().includes(q) ||
-            s.charging_type.includes(q)
-        )
-    })
+    const filtered = useMemo(() => {
+        let result = sessions
+
+        // Date range filter
+        if (dateRange) {
+            const [start, end] = dateRange
+            result = result.filter((s) => {
+                const d = dayjs(s.started_at)
+                return d.isAfter(start.startOf('day')) && d.isBefore(end.endOf('day'))
+            })
+        }
+
+        // Text search filter
+        if (search) {
+            const q = search.toLowerCase()
+            result = result.filter((s) =>
+                (s.location || '').toLowerCase().includes(q) ||
+                (s.provider || '').toLowerCase().includes(q) ||
+                (s.note || '').toLowerCase().includes(q) ||
+                s.charging_type.includes(q)
+            )
+        }
+
+        return result
+    }, [sessions, dateRange, search])
 
     const handleDelete = async (id) => {
         await syncManager.deleteSession(id)
@@ -41,8 +94,25 @@ export default function History({ onEdit }) {
                 <Title level={4} style={{ margin: 0, color: 'var(--text-primary)' }}>
                     📋 History
                 </Title>
-                <Text type="secondary">{sessions.length} session{sessions.length !== 1 ? 's' : ''}</Text>
+                <Text type="secondary">{filtered.length} session{filtered.length !== 1 ? 's' : ''}</Text>
             </div>
+
+            <Segmented
+                value={rangePreset}
+                onChange={handleRangeChange}
+                options={RANGE_OPTIONS}
+                block
+                style={{ marginBottom: rangePreset === 'Custom' ? 8 : 8 }}
+            />
+
+            {rangePreset === 'Custom' && (
+                <RangePicker
+                    value={customRange}
+                    onChange={setCustomRange}
+                    style={{ width: '100%', marginBottom: 8 }}
+                    size="large"
+                />
+            )}
 
             <Input
                 prefix={<SearchOutlined />}
@@ -64,6 +134,7 @@ export default function History({ onEdit }) {
                 <div className="history-list">
                     {filtered.map((session) => {
                         const isComplete = session.ended_at && session.total_cost != null
+                        const hasDuration = session.started_at && session.ended_at
                         return (
                             <div key={session.id} className="history-list-item">
                                 <div className="history-card">
@@ -117,6 +188,16 @@ export default function History({ onEdit }) {
                                         {session.price_per_kwh != null && (
                                             <span className="stat-chip">
                                                 ฿{Number(session.price_per_kwh).toFixed(2)}/kWh
+                                            </span>
+                                        )}
+                                        {session.odometer_km != null && (
+                                            <span className="stat-chip">
+                                                🚗 {Number(session.odometer_km).toLocaleString()} km
+                                            </span>
+                                        )}
+                                        {hasDuration && (
+                                            <span className="stat-chip">
+                                                ⏱ {formatDuration(session.started_at, session.ended_at)}
                                             </span>
                                         )}
                                     </div>
