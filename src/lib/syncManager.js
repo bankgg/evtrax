@@ -145,12 +145,22 @@ class SyncManager {
 
       if (error) throw error
 
-      if (data && data.length > 0) {
+      if (data) {
         // Merge: remote wins for synced items, local wins for pending items
         const pendingIds = new Set(
           (await db.syncQueue.toArray()).map((q) => q.sessionId)
         )
+        const remoteIds = new Set(data.map((r) => r.id))
 
+        // Remove local sessions that are not in remote AND not pending sync
+        const localSessions = await db.sessions.toArray()
+        for (const local of localSessions) {
+          if (!remoteIds.has(local.id) && !pendingIds.has(local.id)) {
+            await db.sessions.delete(local.id)
+          }
+        }
+
+        // Add/update remote sessions
         for (const remote of data) {
           if (!pendingIds.has(remote.id)) {
             await db.sessions.put(remote)

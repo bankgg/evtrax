@@ -6,7 +6,6 @@ import {
     Button,
     Segmented,
     AutoComplete,
-    DatePicker,
     Typography,
     message,
     Card,
@@ -25,6 +24,23 @@ import LocationPicker from '../components/LocationPicker'
 
 const { Title, Text } = Typography
 const BATTERY_KWH = 58.9
+
+const NativeDatetimePicker = ({ value, onChange, placeholder, ...props }) => {
+    const strValue = value ? value.format('YYYY-MM-DDTHH:mm') : ''
+
+    return (
+        <Input
+            type="datetime-local"
+            value={strValue}
+            onChange={(e) => {
+                const val = e.target.value
+                onChange(val ? dayjs(val) : null)
+            }}
+            placeholder={placeholder}
+            {...props}
+        />
+    )
+}
 
 export default function NewCharge({ editSessionId, onDone }) {
     const [form] = Form.useForm()
@@ -205,21 +221,16 @@ export default function NewCharge({ editSessionId, onDone }) {
                             label="Start Time"
                             rules={[{ required: true, message: 'Required' }]}
                         >
-                            <DatePicker
-                                showTime
-                                format="D MMM YYYY · HH:mm"
+                            <NativeDatetimePicker
                                 style={{ width: '100%' }}
                                 size="large"
                             />
                         </Form.Item>
 
                         <Form.Item name="ended_at" label="End Time">
-                            <DatePicker
-                                showTime
-                                format="D MMM YYYY · HH:mm"
+                            <NativeDatetimePicker
                                 style={{ width: '100%' }}
                                 size="large"
-                                placeholder="Fill later when done"
                             />
                         </Form.Item>
                     </Card>
