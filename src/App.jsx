@@ -55,21 +55,21 @@ export default function App() {
   const trapPushedRef = useRef(false)
 
   useEffect(() => {
-    // 1) Push a dummy state so there's always something in history to pop
-    // Chrome/Android requires a user gesture for pushState to act as a proper back-stop.
+    // 1) Push a dummy hash state so there's an explicit URL change in history
     const ensureTrap = () => {
       if (!trapPushedRef.current) {
-        if (!window.history.state?.appExitTrap) {
-          window.history.pushState({ appExitTrap: true }, '')
+        if (window.location.hash !== '#app') {
+          // Push the trap hash
+          window.history.pushState({ appExitTrap: true }, '', '#app')
         }
         trapPushedRef.current = true
       }
     }
 
-    // Try immediately (works in browser sometimes)
+    // Try immediately
     ensureTrap()
 
-    // Bind to first interaction to ensure it sticks in Android PWA
+    // Bind to first interaction to ensure it sticks in Android PWAs aggressively ignoring initial pushState
     const onInteract = () => {
       ensureTrap()
       window.removeEventListener('click', onInteract)
@@ -79,22 +79,27 @@ export default function App() {
     window.addEventListener('touchstart', onInteract, { passive: true })
 
     const handlePopState = (e) => {
-      // 2) Check if user returned to an internal view (e.g. editSession overlay)
-      if (e.state?.view === 'editSession') {
-        return
-      }
-
-      // 3) Check if user returned to the trap state (meaning they closed an overlay like mapPicker or editSession)
-      if (e.state?.appExitTrap) {
-        if (editingSessionId) {
+      // If user came back to a state that is still within the app (hash is #app)
+      if (window.location.hash === '#app') {
+        // Handle child views like editSession closing
+        if (editingSessionId && e.state?.view !== 'editSession') {
           setEditingSessionId(null)
           setActiveTab('history')
         }
+        // Don't trigger exit modal, because they are still deep in the app's history
         return
       }
 
-      // If we are here, we popped the trap state (user wants to exit the app)
+      // If we are here, we popped out of the #app trap (meaning hash is gone, user pressed back to exit)
       trapPushedRef.current = false // reset flag since we left the trap state
+
+      // If an overlay was somehow open when they exited the trap, just close it and restore trap
+      if (editingSessionId) {
+        setEditingSessionId(null)
+        setActiveTab('history')
+        ensureTrap()
+        return
+      }
 
       if (exitModalRef.current) {
         ensureTrap()
@@ -111,6 +116,7 @@ export default function App() {
           exitModalRef.current = null
           // Attempt to naturally close PWA
           window.close()
+          // Go back again physically
           window.history.back()
         },
         onCancel: () => {
