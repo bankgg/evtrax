@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ConfigProvider, theme as antTheme } from 'antd'
+import { ConfigProvider, theme as antTheme, Modal } from 'antd'
 import {
   DashboardOutlined,
   PlusCircleOutlined,
