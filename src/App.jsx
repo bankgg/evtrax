@@ -113,14 +113,16 @@ export default function App() {
     setShowExitConfirm(false)
     isExitingRef.current = true
 
-    // Strategy 1: Try native window close
-    window.close()
-
-    // Strategy 2: Navigate to about:blank — in a standalone PWA,
-    // this forces the window to show nothing, which should close it.
+    // Navigate to index 0 first
+    window.history.back()
+    // Then try to go past index 0 — Samsung should exit the PWA
+    setTimeout(() => {
+      window.history.back()
+    }, 100)
+    // Last resort: if still alive after 500ms, blank the screen
     setTimeout(() => {
       window.location.replace('about:blank')
-    }, 200)
+    }, 500)
   }
 
   const handleCancelExit = () => {
