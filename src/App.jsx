@@ -54,10 +54,17 @@ export default function App() {
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const isTrappedRef = useRef(false)
 
-  // Push the trap state and mark it
+  // Push the trap state and mark it using a real URL change so PWAs respect the history stack
   const pushTrapState = () => {
     if (!isTrappedRef.current) {
-      window.history.pushState({ isAppTrap: true }, '')
+      const currentUrl = new URL(window.location.href)
+      if (currentUrl.searchParams.get('app') !== 'active') {
+        currentUrl.searchParams.set('app', 'active')
+        window.history.pushState({ isAppTrap: true }, '', currentUrl.toString())
+      } else if (!window.history.state?.isAppTrap) {
+        // Just in case URL has the param but state is lost
+        window.history.replaceState({ isAppTrap: true }, '', currentUrl.toString())
+      }
       isTrappedRef.current = true
     }
   }
@@ -72,7 +79,6 @@ export default function App() {
     }
 
     // 2. Also aggressively try to set the trap when the user interact with the app.
-    // This helps bypass some PWA restrictions where initial pushState is ignored before user gesture.
     const onInteract = () => {
       pushTrapState()
       window.removeEventListener('click', onInteract)
@@ -89,15 +95,21 @@ export default function App() {
         return
       }
 
-      // If we reach here, the dummy trap state was popped, which means the back button was pressed
-      // on the main layer of the application
-      isTrappedRef.current = false // We lost the trap state
+      // Check if the URL still has our 'app' flag.
+      // If the flag is gone, the user navigated 'back' out of our trap state.
+      const currentUrl = new URL(window.location.href)
+      const isStillInApp = currentUrl.searchParams.get('app') === 'active'
 
-      // Show the customized confirmation dialog
-      setShowExitConfirm(true)
+      if (!isStillInApp || (!e.state?.isAppTrap && !e.state?.view)) {
+        // The dummy trap state was popped, meaning the back button was pressed on the main layer of the application
+        isTrappedRef.current = false // We lost the trap state
 
-      // Immediately push the trap state back on to prevent the next back button press from closing the app
-      pushTrapState()
+        // Show the customized confirmation dialog
+        setShowExitConfirm(true)
+
+        // Immediately push the trap state back on to prevent the next back button press from closing the app
+        pushTrapState()
+      }
     }
 
     window.addEventListener('popstate', handlePopState)
