@@ -55,23 +55,35 @@ export default function App() {
   const isTrappedRef = useRef(false)
   const isExitingRef = useRef(false)
 
-  // 1. Setup the trap ONLY on the first user interaction.
-  // If we pushState on mount without interaction, Android PWAs convert it to a replaceState, destroying the history root!
+  // 1. Initialize a two-layer history trap.
+  // We use the event capture phase to ensure this runs BEFORE any React synthetic events,
+  // preventing a scenario where a child component calls pushState before the trap is laid.
   useEffect(() => {
-    const onInteract = () => {
+    const initTrap = () => {
       if (!isTrappedRef.current) {
-        window.history.pushState({ isAppTrap: true }, '')
+        // We push two states. The first is a safe 'root' buffer to never hit index 0.
+        // The second is the 'active' state where the user actually lives.
+        window.history.pushState({ appLayer: 'root' }, '')
+        window.history.pushState({ appLayer: 'active' }, '')
         isTrappedRef.current = true
       }
-      window.removeEventListener('click', onInteract)
-      window.removeEventListener('touchstart', onInteract)
     }
-    window.addEventListener('click', onInteract)
-    window.addEventListener('touchstart', onInteract, { passive: true })
+
+    // Try on mount
+    initTrap()
+
+    const onInteract = () => {
+      initTrap()
+      window.removeEventListener('click', onInteract, { capture: true })
+      window.removeEventListener('touchstart', onInteract, { capture: true })
+    }
+    // Listen in the capture phase to intercept the absolute first gesture!
+    window.addEventListener('click', onInteract, { capture: true })
+    window.addEventListener('touchstart', onInteract, { capture: true, passive: true })
 
     return () => {
-      window.removeEventListener('click', onInteract)
-      window.removeEventListener('touchstart', onInteract)
+      window.removeEventListener('click', onInteract, { capture: true })
+      window.removeEventListener('touchstart', onInteract, { capture: true })
     }
   }, []) // Empty dependency array so we don't re-bind on tab changes
 
@@ -82,33 +94,21 @@ export default function App() {
       if (isExitingRef.current) return
 
       // If we are handling an inner modal state (like Edit Session) returning
+      // We clear the edit mode if the state isn't the edit mode state anymore.
       if (editingSessionId && e.state?.view !== 'editSession') {
         setEditingSessionId(null)
         setActiveTab('history')
-        return
+        // We do not return here, because if they hit the root layer, we want the modal to show.
       }
 
-      // If the state is precisely the trap state, the user navigated BACK from an overlay (like Map Picker)
-      // to the root layout. We just let them arrive safely.
-      if (e.state?.isAppTrap) {
-        return
+      // If the user hit our 'root' buffer layer, they pressed back from the PWA main content.
+      if (e.state?.appLayer === 'root') {
+        // Show the customized confirmation dialog
+        setShowExitConfirm(true)
+
+        // Immediately push the active layer back on so the NEXT back button press does not close the app
+        window.history.pushState({ appLayer: 'active' }, '')
       }
-
-      // If the state has views or overlays, they are going forward. Normal navigation.
-      if (e.state?.view || e.state?.overlay) {
-        return
-      }
-
-      // If we reach here, it means the dummy trap state was physically popped.
-      // We are at the Android WebApk root view and the back button signifies an Exit Intent.
-      isTrappedRef.current = false // We lost the trap state
-
-      // Show the customized confirmation dialog
-      setShowExitConfirm(true)
-
-      // Immediately push the trap state back on to prevent the NEXT back button press from closing the app
-      window.history.pushState({ isAppTrap: true }, '')
-      isTrappedRef.current = true
     }
 
     window.addEventListener('popstate', handlePopState)
@@ -125,15 +125,15 @@ export default function App() {
     window.close()
 
     // In Android contexts window.close() is often blocked, so we trigger history physically backwards 
-    // past our trap to engage the kernel-level close protocol.
+    // past our root buffer. We are at 'active' (index 2+), so go(-2) hits index 0, commanding the OS to exit.
     setTimeout(() => {
-      window.history.back()
+      window.history.go(-2)
     }, 100)
   }
 
   const handleCancelExit = () => {
     setShowExitConfirm(false)
-    // We already re-pushed the trap state in handlePopState before showing the modal!
+    // We already re-pushed the 'active' state in handlePopState!
   }
 
   return (
