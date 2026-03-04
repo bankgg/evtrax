@@ -54,19 +54,22 @@ export default function App() {
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const isTrappedRef = useRef(false)
   const isExitingRef = useRef(false)
+  const [debugInfo, setDebugInfo] = useState('')
 
   useEffect(() => {
-    // 1. Lock the app to a specific hash so Android's native back stack registers it.
+    // 1. Use DIRECT hash assignment (not pushState) — this performs a real navigation
+    // that Samsung Internet's PWA engine must respect.
     const lockHash = () => {
       if (!isTrappedRef.current && window.location.hash !== '#app') {
-        window.history.pushState(null, '', '#app')
+        window.location.hash = 'app' // Direct assignment, NOT pushState
         isTrappedRef.current = true
+        setDebugInfo('TRAP SET: len=' + window.history.length)
       }
     }
 
     lockHash()
 
-    // 2. Also ensure interaction lock just in case of PWA cold-launch ignore.
+    // 2. Also ensure interaction lock in case PWA ignores on-mount hash changes.
     const onInteract = () => {
       lockHash()
       window.removeEventListener('click', onInteract, { capture: true })
@@ -75,28 +78,49 @@ export default function App() {
     window.addEventListener('click', onInteract, { capture: true })
     window.addEventListener('touchstart', onInteract, { capture: true, passive: true })
 
-    const handlePopState = (e) => {
+    // 3. Listen to BOTH popstate and hashchange for maximum compatibility
+    const handleBackNavigation = (eventName) => {
       if (isExitingRef.current) return
 
-      // Handle Edit Session returning (cleans up internal states)
-      if (editingSessionId && e.state?.view !== 'editSession') {
-        setEditingSessionId(null)
-        setActiveTab('history')
+      const currentHash = window.location.hash
+      setDebugInfo(eventName + ': hash=' + currentHash + ', len=' + window.history.length)
+
+      // Handle Edit Session returning
+      if (editingSessionId) {
+        const state = window.history.state
+        if (state?.view !== 'editSession') {
+          setEditingSessionId(null)
+          setActiveTab('history')
+        }
       }
 
-      // 3. Android Back Button Trap
-      // The user pressed the hardware back button, popping the #app hash.
-      if (window.location.hash !== '#app') {
+      // Back Button Trap: if hash is no longer #app, user is trying to exit
+      if (currentHash !== '#app') {
         setShowExitConfirm(true)
-        // Immediately shove the #app hash back into history to prevent exiting 
-        // on the next immediate back press.
-        window.history.pushState(null, '', '#app')
+        // Push hash back to prevent exit
+        window.location.hash = 'app'
       }
     }
 
+    const handlePopState = () => handleBackNavigation('popstate')
+    const handleHashChange = () => handleBackNavigation('hashchange')
+
     window.addEventListener('popstate', handlePopState)
+    window.addEventListener('hashchange', handleHashChange)
+
+    // Also try beforeunload as a last resort for Samsung Internet
+    const handleBeforeUnload = (e) => {
+      if (!isExitingRef.current) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
     return () => {
       window.removeEventListener('popstate', handlePopState)
+      window.removeEventListener('hashchange', handleHashChange)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
       window.removeEventListener('click', onInteract, { capture: true })
       window.removeEventListener('touchstart', onInteract, { capture: true })
     }
@@ -105,11 +129,7 @@ export default function App() {
   const handleConfirmExit = () => {
     setShowExitConfirm(false)
     isExitingRef.current = true
-
-    // Close cleanly
     window.close()
-
-    // Fallback: We are currently at #app. To exit, we go backwards past the empty hash.
     setTimeout(() => {
       window.history.go(-2)
     }, 100)
@@ -156,6 +176,12 @@ export default function App() {
     >
       <div className="app-shell">
         <SyncStatusBar />
+        {/* DEBUG: Remove after testing */}
+        {debugInfo && (
+          <div style={{ background: '#ff0', color: '#000', padding: 4, fontSize: 11, textAlign: 'center', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 99999 }}>
+            {debugInfo}
+          </div>
+        )}
 
         <main className="app-content">
           {activeTab === 'dashboard' && <Dashboard />}
