@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
-import { ConfigProvider, theme as antTheme, Modal } from 'antd'
+import { useState, useEffect } from 'react'
+import { ConfigProvider, theme as antTheme } from 'antd'
 import {
   DashboardOutlined,
   PlusCircleOutlined,
@@ -23,27 +23,8 @@ const tabs = [
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [editingSessionId, setEditingSessionId] = useState(null)
-  const [showExitConfirm, setShowExitConfirm] = useState(false)
-  const isTrappedRef = useRef(false)
-  const isExitingRef = useRef(false)
-  const activeTabRef = useRef('dashboard')
-
-  useEffect(() => { activeTabRef.current = activeTab }, [activeTab])
-
-  // Samsung Internet PWA ONLY respects pushState called inside React element onClick.
-  // This pushes a two-layer trap (guard + active) via pushState.
-  const ensureTrap = () => {
-    if (!isTrappedRef.current) {
-      window.history.pushState({ guard: true }, '')
-      window.history.pushState({ active: true, tab: activeTabRef.current }, '')
-      isTrappedRef.current = true
-    }
-  }
-
-  const handleAppClick = () => ensureTrap()
 
   const handleEdit = (sessionId) => {
-    ensureTrap()
     window.history.pushState({ view: 'editSession' }, '')
     setEditingSessionId(sessionId)
     setActiveTab('new')
@@ -66,47 +47,20 @@ export default function App() {
         }
       }
     }
-    ensureTrap()
     setActiveTab(key)
   }
 
   useEffect(() => {
     const handlePopState = (e) => {
-      if (isExitingRef.current) return
-
-      const s = e.state
-
-      if (editingSessionId && s?.view !== 'editSession') {
+      if (editingSessionId && e.state?.view !== 'editSession') {
         setEditingSessionId(null)
         setActiveTab('history')
-        return
       }
-
-      if (s?.overlay) return
-      if (s?.active) return
-      if (s?.view) return
-
-      // Guard layer or null — exit attempt
-      setShowExitConfirm(true)
     }
 
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
   }, [editingSessionId])
-
-  const handleConfirmExit = () => {
-    setShowExitConfirm(false)
-    isExitingRef.current = true
-    // Navigate to index 0. Samsung Internet only exits PWAs via
-    // hardware back button, so the next back press will close the app.
-    window.history.back()
-  }
-
-  const handleCancelExit = () => {
-    setShowExitConfirm(false)
-    // Re-establish the trap from this button's onClick (Samsung respects this).
-    window.history.pushState({ active: true, tab: activeTabRef.current }, '')
-  }
 
   return (
     <ConfigProvider
@@ -143,7 +97,7 @@ export default function App() {
         },
       }}
     >
-      <div className="app-shell" onClick={handleAppClick}>
+      <div className="app-shell">
         <SyncStatusBar />
 
         <main className="app-content">
@@ -171,19 +125,6 @@ export default function App() {
           ))}
         </nav>
       </div>
-
-      <Modal
-        title="Exit App?"
-        open={showExitConfirm}
-        onOk={handleConfirmExit}
-        onCancel={handleCancelExit}
-        okText="Exit"
-        cancelText="Stay"
-        centered
-      >
-        <p>Press back once more after exiting to close the app.</p>
-      </Modal>
     </ConfigProvider>
   )
 }
-
