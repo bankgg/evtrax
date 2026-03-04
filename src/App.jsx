@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ConfigProvider, theme as antTheme } from 'antd'
 import {
   DashboardOutlined,
@@ -51,33 +51,80 @@ export default function App() {
   }
 
   // --- App Exit Confirmation Logic ---
+  const [showExitConfirm, setShowExitConfirm] = useState(false)
+  const isTrappedRef = useRef(false)
+
+  // Push the trap state and mark it
+  const pushTrapState = () => {
+    if (!isTrappedRef.current) {
+      window.history.pushState({ isAppTrap: true }, '')
+      isTrappedRef.current = true
+    }
+  }
+
+  // Handle the browser popstate specifically for the hardware back button
   useEffect(() => {
-    // 1) Handle internal modal / overlay popstates (e.g., Edit Session, Map)
+    // 1. Setup the trap immediately if we aren't already trapped
+    if (!window.history.state?.isAppTrap) {
+      pushTrapState()
+    } else {
+      isTrappedRef.current = true
+    }
+
+    // 2. Also aggressively try to set the trap when the user interact with the app.
+    // This helps bypass some PWA restrictions where initial pushState is ignored before user gesture.
+    const onInteract = () => {
+      pushTrapState()
+      window.removeEventListener('click', onInteract)
+      window.removeEventListener('touchstart', onInteract)
+    }
+    window.addEventListener('click', onInteract)
+    window.addEventListener('touchstart', onInteract, { passive: true })
+
     const handlePopState = (e) => {
+      // If we are handling an inner modal state (like Edit Session) returning
       if (editingSessionId && e.state?.view !== 'editSession') {
         setEditingSessionId(null)
         setActiveTab('history')
+        return
       }
-    }
 
-    // 2) The actual PWA/Browser exit trap uses the native beforeunload event.
-    // Modern Android PWAs will fire this when the native back button attempts to close the app.
-    const handleBeforeUnload = (e) => {
-      // Browsers generally ignore the custom string, but setting returnValue triggers the native "Leave Site?" prompt
-      // which safely intercepts the Android back button exit action in PWAs without history API hacks.
-      e.preventDefault()
-      e.returnValue = 'Are you sure you want to exit?'
-      return e.returnValue
+      // If we reach here, the dummy trap state was popped, which means the back button was pressed
+      // on the main layer of the application
+      isTrappedRef.current = false // We lost the trap state
+
+      // Show the customized confirmation dialog
+      setShowExitConfirm(true)
+
+      // Immediately push the trap state back on to prevent the next back button press from closing the app
+      pushTrapState()
     }
 
     window.addEventListener('popstate', handlePopState)
-    window.addEventListener('beforeunload', handleBeforeUnload)
-
     return () => {
       window.removeEventListener('popstate', handlePopState)
-      window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.removeEventListener('click', onInteract)
+      window.removeEventListener('touchstart', onInteract)
     }
   }, [editingSessionId])
+
+  const handleConfirmExit = () => {
+    setShowExitConfirm(false)
+    // Actually close the app/window now
+    window.close()
+
+    // In some PWA environments window.close() might be blocked, so we also go back past our trap
+    setTimeout(() => {
+      // Temporarily disable the trap flag so we don't catch our own exit
+      isTrappedRef.current = false
+      window.history.back()
+    }, 100)
+  }
+
+  const handleCancelExit = () => {
+    setShowExitConfirm(false)
+    // We already re-pushed the trap state in handlePopState before showing the modal, so we just close the modal.
+  }
 
   return (
     <ConfigProvider
@@ -142,6 +189,18 @@ export default function App() {
           ))}
         </nav>
       </div>
+
+      <Modal
+        title="Exit App?"
+        open={showExitConfirm}
+        onOk={handleConfirmExit}
+        onCancel={handleCancelExit}
+        okText="Exit"
+        cancelText="Cancel"
+        centered
+      >
+        <p>Are you sure you want to stop tracking and exit?</p>
+      </Modal>
     </ConfigProvider>
   )
 }
