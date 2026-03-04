@@ -53,41 +53,34 @@ export default function App() {
   // --- App Exit Confirmation Logic ---
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const isTrappedRef = useRef(false)
+  const isExitingRef = useRef(false)
 
-  // Push the trap state and mark it using a real URL change so PWAs respect the history stack
-  const pushTrapState = () => {
-    if (!isTrappedRef.current) {
-      const currentUrl = new URL(window.location.href)
-      if (currentUrl.searchParams.get('app') !== 'active') {
-        currentUrl.searchParams.set('app', 'active')
-        window.history.pushState({ isAppTrap: true }, '', currentUrl.toString())
-      } else if (!window.history.state?.isAppTrap) {
-        // Just in case URL has the param but state is lost
-        window.history.replaceState({ isAppTrap: true }, '', currentUrl.toString())
-      }
-      isTrappedRef.current = true
-    }
-  }
-
-  // Handle the browser popstate specifically for the hardware back button
+  // 1. Setup the trap ONLY on the first user interaction.
+  // If we pushState on mount without interaction, Android PWAs convert it to a replaceState, destroying the history root!
   useEffect(() => {
-    // 1. Setup the trap immediately if we aren't already trapped
-    if (!window.history.state?.isAppTrap) {
-      pushTrapState()
-    } else {
-      isTrappedRef.current = true
-    }
-
-    // 2. Also aggressively try to set the trap when the user interact with the app.
     const onInteract = () => {
-      pushTrapState()
+      if (!isTrappedRef.current) {
+        window.history.pushState({ isAppTrap: true }, '')
+        isTrappedRef.current = true
+      }
       window.removeEventListener('click', onInteract)
       window.removeEventListener('touchstart', onInteract)
     }
     window.addEventListener('click', onInteract)
     window.addEventListener('touchstart', onInteract, { passive: true })
 
+    return () => {
+      window.removeEventListener('click', onInteract)
+      window.removeEventListener('touchstart', onInteract)
+    }
+  }, []) // Empty dependency array so we don't re-bind on tab changes
+
+  // 2. Handle popstate routing and showing the modal
+  useEffect(() => {
     const handlePopState = (e) => {
+      // If we are actively tearing down the app, ignore all popstates
+      if (isExitingRef.current) return
+
       // If we are handling an inner modal state (like Edit Session) returning
       if (editingSessionId && e.state?.view !== 'editSession') {
         setEditingSessionId(null)
@@ -95,47 +88,52 @@ export default function App() {
         return
       }
 
-      // Check if the URL still has our 'app' flag.
-      // If the flag is gone, the user navigated 'back' out of our trap state.
-      const currentUrl = new URL(window.location.href)
-      const isStillInApp = currentUrl.searchParams.get('app') === 'active'
-
-      if (!isStillInApp || (!e.state?.isAppTrap && !e.state?.view)) {
-        // The dummy trap state was popped, meaning the back button was pressed on the main layer of the application
-        isTrappedRef.current = false // We lost the trap state
-
-        // Show the customized confirmation dialog
-        setShowExitConfirm(true)
-
-        // Immediately push the trap state back on to prevent the next back button press from closing the app
-        pushTrapState()
+      // If the state is precisely the trap state, the user navigated BACK from an overlay (like Map Picker)
+      // to the root layout. We just let them arrive safely.
+      if (e.state?.isAppTrap) {
+        return
       }
+
+      // If the state has views or overlays, they are going forward. Normal navigation.
+      if (e.state?.view || e.state?.overlay) {
+        return
+      }
+
+      // If we reach here, it means the dummy trap state was physically popped.
+      // We are at the Android WebApk root view and the back button signifies an Exit Intent.
+      isTrappedRef.current = false // We lost the trap state
+
+      // Show the customized confirmation dialog
+      setShowExitConfirm(true)
+
+      // Immediately push the trap state back on to prevent the NEXT back button press from closing the app
+      window.history.pushState({ isAppTrap: true }, '')
+      isTrappedRef.current = true
     }
 
     window.addEventListener('popstate', handlePopState)
     return () => {
       window.removeEventListener('popstate', handlePopState)
-      window.removeEventListener('click', onInteract)
-      window.removeEventListener('touchstart', onInteract)
     }
   }, [editingSessionId])
 
   const handleConfirmExit = () => {
     setShowExitConfirm(false)
-    // Actually close the app/window now
+    isExitingRef.current = true // Prevent popstate loops manually
+
+    // Naturally close PWA
     window.close()
 
-    // In some PWA environments window.close() might be blocked, so we also go back past our trap
+    // In Android contexts window.close() is often blocked, so we trigger history physically backwards 
+    // past our trap to engage the kernel-level close protocol.
     setTimeout(() => {
-      // Temporarily disable the trap flag so we don't catch our own exit
-      isTrappedRef.current = false
       window.history.back()
     }, 100)
   }
 
   const handleCancelExit = () => {
     setShowExitConfirm(false)
-    // We already re-pushed the trap state in handlePopState before showing the modal, so we just close the modal.
+    // We already re-pushed the trap state in handlePopState before showing the modal!
   }
 
   return (
