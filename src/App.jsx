@@ -55,77 +55,61 @@ export default function App() {
   const isTrappedRef = useRef(false)
   const isExitingRef = useRef(false)
 
-  // 1. Initialize a two-layer history trap.
-  // We use the event capture phase to ensure this runs BEFORE any React synthetic events,
-  // preventing a scenario where a child component calls pushState before the trap is laid.
   useEffect(() => {
-    const initTrap = () => {
-      if (!isTrappedRef.current) {
-        // We push two states. The first is a safe 'root' buffer to never hit index 0.
-        // The second is the 'active' state where the user actually lives.
-        window.history.pushState({ appLayer: 'root' }, '')
-        window.history.pushState({ appLayer: 'active' }, '')
+    // 1. Lock the app to a specific hash so Android's native back stack registers it.
+    const lockHash = () => {
+      if (!isTrappedRef.current && window.location.hash !== '#app') {
+        window.history.pushState(null, '', '#app')
         isTrappedRef.current = true
       }
     }
 
-    // Try on mount
-    initTrap()
+    lockHash()
 
+    // 2. Also ensure interaction lock just in case of PWA cold-launch ignore.
     const onInteract = () => {
-      initTrap()
+      lockHash()
       window.removeEventListener('click', onInteract, { capture: true })
       window.removeEventListener('touchstart', onInteract, { capture: true })
     }
-    // Listen in the capture phase to intercept the absolute first gesture!
     window.addEventListener('click', onInteract, { capture: true })
     window.addEventListener('touchstart', onInteract, { capture: true, passive: true })
 
-    return () => {
-      window.removeEventListener('click', onInteract, { capture: true })
-      window.removeEventListener('touchstart', onInteract, { capture: true })
-    }
-  }, []) // Empty dependency array so we don't re-bind on tab changes
-
-  // 2. Handle popstate routing and showing the modal
-  useEffect(() => {
     const handlePopState = (e) => {
-      // If we are actively tearing down the app, ignore all popstates
       if (isExitingRef.current) return
 
-      // If we are handling an inner modal state (like Edit Session) returning
-      // We clear the edit mode if the state isn't the edit mode state anymore.
+      // Handle Edit Session returning (cleans up internal states)
       if (editingSessionId && e.state?.view !== 'editSession') {
         setEditingSessionId(null)
         setActiveTab('history')
-        // We do not return here, because if they hit the root layer, we want the modal to show.
       }
 
-      // If the user hit our 'root' buffer layer, they pressed back from the PWA main content.
-      if (e.state?.appLayer === 'root') {
-        // Show the customized confirmation dialog
+      // 3. Android Back Button Trap
+      // The user pressed the hardware back button, popping the #app hash.
+      if (window.location.hash !== '#app') {
         setShowExitConfirm(true)
-
-        // Immediately push the active layer back on so the NEXT back button press does not close the app
-        window.history.pushState({ appLayer: 'active' }, '')
+        // Immediately shove the #app hash back into history to prevent exiting 
+        // on the next immediate back press.
+        window.history.pushState(null, '', '#app')
       }
     }
 
     window.addEventListener('popstate', handlePopState)
     return () => {
       window.removeEventListener('popstate', handlePopState)
+      window.removeEventListener('click', onInteract, { capture: true })
+      window.removeEventListener('touchstart', onInteract, { capture: true })
     }
   }, [editingSessionId])
 
   const handleConfirmExit = () => {
     setShowExitConfirm(false)
-    isExitingRef.current = true // Prevent popstate loops manually
+    isExitingRef.current = true
 
-    // Naturally close PWA
+    // Close cleanly
     window.close()
 
-    // In Android contexts window.close() is often blocked, so we trigger history physically backwards 
-    // past our root buffer. We are at 'active' (index 2+), so go(-2) hits index 0, commanding the OS to exit.
+    // Fallback: We are currently at #app. To exit, we go backwards past the empty hash.
     setTimeout(() => {
       window.history.go(-2)
     }, 100)
@@ -133,7 +117,6 @@ export default function App() {
 
   const handleCancelExit = () => {
     setShowExitConfirm(false)
-    // We already re-pushed the 'active' state in handlePopState!
   }
 
   return (
