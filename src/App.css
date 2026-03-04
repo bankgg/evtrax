@@ -36,13 +36,19 @@ body {
 
 /* ── App Shell ──────────────────────────────────────────── */
 
+html, body {
+  height: 100%;
+  overflow: hidden; /* We disable body scroll here; app-content handles scrolling */
+}
+
 .app-shell {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  height: 100dvh;
   max-width: 480px;
   margin: 0 auto;
   position: relative;
+  overflow: hidden; /* Keeps things inside the app shell constrained */
 }
 
 .app-content {

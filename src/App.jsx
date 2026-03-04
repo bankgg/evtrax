@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
-import { ConfigProvider, theme as antTheme, Modal } from 'antd'
+import { useState, useEffect } from 'react'
+import { ConfigProvider, theme as antTheme } from 'antd'
 import {
   DashboardOutlined,
   PlusCircleOutlined,
@@ -23,7 +23,6 @@ const tabs = [
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [editingSessionId, setEditingSessionId] = useState(null)
-  const exitModalRef = useRef(null)
 
   const handleEdit = (sessionId) => {
     window.history.pushState({ view: 'editSession' }, '')
@@ -52,86 +51,31 @@ export default function App() {
   }
 
   // --- App Exit Confirmation Logic ---
-  const trapPushedRef = useRef(false)
-
   useEffect(() => {
-    // 1) Push a dummy hash state so there's an explicit URL change in history
-    const ensureTrap = () => {
-      if (!trapPushedRef.current) {
-        if (window.location.hash !== '#app') {
-          // Push the trap hash
-          window.history.pushState({ appExitTrap: true }, '', '#app')
-        }
-        trapPushedRef.current = true
-      }
-    }
-
-    // Try immediately
-    ensureTrap()
-
-    // Bind to first interaction to ensure it sticks in Android PWAs aggressively ignoring initial pushState
-    const onInteract = () => {
-      ensureTrap()
-      window.removeEventListener('click', onInteract)
-      window.removeEventListener('touchstart', onInteract)
-    }
-    window.addEventListener('click', onInteract)
-    window.addEventListener('touchstart', onInteract, { passive: true })
-
+    // 1) Handle internal modal / overlay popstates (e.g., Edit Session, Map)
     const handlePopState = (e) => {
-      // If user came back to a state that is still within the app (hash is #app)
-      if (window.location.hash === '#app') {
-        // Handle child views like editSession closing
-        if (editingSessionId && e.state?.view !== 'editSession') {
-          setEditingSessionId(null)
-          setActiveTab('history')
-        }
-        // Don't trigger exit modal, because they are still deep in the app's history
-        return
-      }
-
-      // If we are here, we popped out of the #app trap (meaning hash is gone, user pressed back to exit)
-      trapPushedRef.current = false // reset flag since we left the trap state
-
-      // If an overlay was somehow open when they exited the trap, just close it and restore trap
-      if (editingSessionId) {
+      if (editingSessionId && e.state?.view !== 'editSession') {
         setEditingSessionId(null)
         setActiveTab('history')
-        ensureTrap()
-        return
       }
+    }
 
-      if (exitModalRef.current) {
-        ensureTrap()
-        return
-      }
-
-      exitModalRef.current = Modal.confirm({
-        title: 'Exit App?',
-        content: 'Are you sure you want to stop tracking and exit?',
-        okText: 'Exit',
-        cancelText: 'Cancel',
-        centered: true,
-        onOk: () => {
-          exitModalRef.current = null
-          // Attempt to naturally close PWA
-          window.close()
-          // Go back again physically
-          window.history.back()
-        },
-        onCancel: () => {
-          exitModalRef.current = null
-          // User canceled, push the trap state back on to prevent exit next time
-          ensureTrap()
-        },
-      })
+    // 2) The actual PWA/Browser exit trap uses the native beforeunload event.
+    // Modern Android PWAs will fire this when the native back button attempts to close the app.
+    const handleBeforeUnload = (e) => {
+      // Browsers generally ignore the custom string, but setting returnValue triggers the native "Leave Site?" prompt
+      // which safely intercepts the Android back button exit action in PWAs without history API hacks.
+      e.preventDefault()
+      e.returnValue = 'Are you sure you want to exit?'
+      return e.returnValue
     }
 
     window.addEventListener('popstate', handlePopState)
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
     return () => {
       window.removeEventListener('popstate', handlePopState)
-      window.removeEventListener('click', onInteract)
-      window.removeEventListener('touchstart', onInteract)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
     }
   }, [editingSessionId])
 
