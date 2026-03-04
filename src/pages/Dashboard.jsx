@@ -7,9 +7,11 @@ import {
     DashboardOutlined,
     FireOutlined,
     CarOutlined,
+    ShareAltOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useSessions } from '../hooks/useSessions'
+import ReportModal from '../components/ReportModal'
 
 const { Title, Text } = Typography
 const BATTERY_KWH = 58.9
@@ -30,6 +32,7 @@ export default function Dashboard() {
     const [rangePreset, setRangePreset] = useState(() => localStorage.getItem('evtrax_range') || 'Month')
     const [customRange, setCustomRange] = useState(null)
     const [rangeOpen, setRangeOpen] = useState(false)
+    const [reportOpen, setReportOpen] = useState(false)
 
     const handleCustomChange = (dates) => {
         setCustomRange(dates)
@@ -144,6 +147,15 @@ export default function Dashboard() {
                 <Title level={4} style={{ margin: 0, color: 'var(--text-primary)' }}>
                     <DashboardOutlined /> Dashboard
                 </Title>
+                {stats && (
+                    <button
+                        className="report-trigger-btn"
+                        onClick={() => setReportOpen(true)}
+                        aria-label="Generate Report"
+                    >
+                        <ShareAltOutlined />
+                    </button>
+                )}
             </div>
 
             <Segmented
@@ -357,6 +369,14 @@ export default function Dashboard() {
                     </div>
                 </>
             )}
+
+            <ReportModal
+                open={reportOpen}
+                onClose={() => setReportOpen(false)}
+                stats={stats}
+                dateRange={dateRange}
+                hasEfficiency={stats?.totalDistance != null}
+            />
         </div>
     )
 }
