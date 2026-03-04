@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { ConfigProvider, theme as antTheme } from 'antd'
+import { useState, useEffect, useRef } from 'react'
+import { ConfigProvider, theme as antTheme, Modal } from 'antd'
 import {
   DashboardOutlined,
   PlusCircleOutlined,
@@ -23,8 +23,10 @@ const tabs = [
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [editingSessionId, setEditingSessionId] = useState(null)
+  const exitModalRef = useRef(null)
 
   const handleEdit = (sessionId) => {
+    window.history.pushState({ view: 'editSession' }, '')
     setEditingSessionId(sessionId)
     setActiveTab('new')
   }
@@ -32,14 +34,70 @@ export default function App() {
   const handleDoneEditing = () => {
     setEditingSessionId(null)
     setActiveTab('history')
+    if (window.history.state?.view === 'editSession') {
+      window.history.back()
+    }
   }
 
   const handleTabChange = (key) => {
     if (key !== 'new') {
-      setEditingSessionId(null)
+      if (editingSessionId) {
+        setEditingSessionId(null)
+        if (window.history.state?.view === 'editSession') {
+          window.history.back()
+        }
+      }
     }
     setActiveTab(key)
   }
+
+  // --- App Exit Confirmation Logic ---
+  useEffect(() => {
+    // 1) Push a dummy state so there's always something in history to pop
+    if (!window.history.state?.appExitTrap) {
+      window.history.pushState({ appExitTrap: true }, '')
+    }
+
+    const handlePopState = (e) => {
+      // 2) Check if user returned to an internal view (e.g. editSession overlay)
+      if (e.state?.view === 'editSession') {
+        return
+      }
+
+      // 3) Check if user returned to the trap state (meaning they closed an overlay like mapPicker or editSession)
+      if (e.state?.appExitTrap) {
+        if (editingSessionId && e.state?.view !== 'editSession') {
+          setEditingSessionId(null)
+          setActiveTab('history')
+        }
+        return
+      }
+
+      // If we are here, we popped the trap state (user wants to exit the app)
+      if (exitModalRef.current) return // Modal already open
+
+      exitModalRef.current = Modal.confirm({
+        title: 'Exit App?',
+        content: 'Are you sure you want to stop tracking and exit?',
+        okText: 'Exit',
+        cancelText: 'Cancel',
+        centered: true,
+        onOk: () => {
+          exitModalRef.current = null
+          // User confirmed, actually let them exit by going back again
+          window.history.back()
+        },
+        onCancel: () => {
+          exitModalRef.current = null
+          // User canceled, push the trap state back on to prevent exit next time
+          window.history.pushState({ appExitTrap: true }, '')
+        },
+      })
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [editingSessionId])
 
   return (
     <ConfigProvider

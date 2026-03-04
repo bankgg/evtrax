@@ -362,6 +362,18 @@ body {
   color: var(--text-secondary) !important;
 }
 
+/* ── Recharts Overrides ─────────────────────────────────── */
+
+.recharts-wrapper,
+.recharts-wrapper * {
+  outline: none !important;
+}
+
+.recharts-surface,
+.recharts-surface * {
+  outline: none !important;
+}
+
 /* ── Scrollbar ──────────────────────────────────────────── */
 
 ::-webkit-scrollbar {
@@ -375,6 +387,16 @@ body {
 ::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 2px;
+}
+
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  ::-webkit-scrollbar {
+    display: none;
+  }
+  * {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
 /* ── Media Queries ──────────────────────────────────────── */

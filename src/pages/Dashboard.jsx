@@ -273,7 +273,7 @@ export default function Dashboard() {
                             <Card size="small" style={{ paddingTop: 24, paddingRight: 24 }}>
                                 <div style={{ width: '100%', height: 250 }}>
                                     <ResponsiveContainer>
-                                        <LineChart data={chartData}>
+                                        <LineChart data={chartData} accessibilityLayer={false}>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
                                             <XAxis
                                                 dataKey="formattedDate"

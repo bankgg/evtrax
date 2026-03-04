@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Typography, Empty, Card, Tag, Spin } from 'antd'
 import { EnvironmentOutlined, ThunderboltOutlined, DollarOutlined } from '@ant-design/icons'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'

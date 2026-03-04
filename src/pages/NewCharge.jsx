@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import {
     Form,
     InputNumber,
@@ -53,6 +53,28 @@ export default function NewCharge({ editSessionId, onDone }) {
     const [geoCoords, setGeoCoords] = useState(null)
     const [geoStatus, setGeoStatus] = useState('idle') // idle | loading | done | error
     const [showMapPicker, setShowMapPicker] = useState(false)
+
+    const openMapPicker = () => {
+        window.history.pushState({ overlay: 'mapPicker' }, '')
+        setShowMapPicker(true)
+    }
+
+    const closeMapPicker = () => {
+        setShowMapPicker(false)
+        if (window.history.state?.overlay === 'mapPicker') {
+            window.history.back()
+        }
+    }
+
+    useEffect(() => {
+        const handlePopState = (e) => {
+            if (showMapPicker && e.state?.overlay !== 'mapPicker') {
+                setShowMapPicker(false)
+            }
+        }
+        window.addEventListener('popstate', handlePopState)
+        return () => window.removeEventListener('popstate', handlePopState)
+    }, [showMapPicker])
 
     // Auto-capture GPS on mount (unless editing with existing coords)
     const captureLocation = () => {
@@ -246,7 +268,7 @@ export default function NewCharge({ editSessionId, onDone }) {
                                     {geoStatus === 'loading' && '📍 Locating...'}
                                     {
                                         geoStatus === 'done' && (
-                                            <span onClick={() => setShowMapPicker(true)}>
+                                            <span onClick={openMapPicker}>
                                                 📍 {geoCoords.lat.toFixed(4)}, {geoCoords.lng.toFixed(4)}{' '}
                                                 <EnvironmentOutlined style={{ marginLeft: 4 }} />
                                             </span>
@@ -254,14 +276,14 @@ export default function NewCharge({ editSessionId, onDone }) {
                                     }
                                     {
                                         geoStatus === 'error' && (
-                                            <span onClick={() => setShowMapPicker(true)} style={{ color: '#ff7875' }}>
+                                            <span onClick={openMapPicker} style={{ color: '#ff7875' }}>
                                                 📍 Pick location
                                             </span>
                                         )
                                     }
                                     {
                                         geoStatus === 'idle' && (
-                                            <span onClick={() => setShowMapPicker(true)}>
+                                            <span onClick={openMapPicker}>
                                                 📍 Pick location
                                             </span>
                                         )
@@ -431,9 +453,9 @@ export default function NewCharge({ editSessionId, onDone }) {
                     onConfirm={(coords) => {
                         setGeoCoords(coords)
                         setGeoStatus('done')
-                        setShowMapPicker(false)
+                        closeMapPicker()
                     }}
-                    onCancel={() => setShowMapPicker(false)}
+                    onCancel={closeMapPicker}
                 />
             )}
         </>
