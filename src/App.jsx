@@ -54,33 +54,48 @@ export default function App() {
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const isTrappedRef = useRef(false)
   const isExitingRef = useRef(false)
+  const readyRef = useRef(false)
   const [debugInfo, setDebugInfo] = useState('')
 
+  // Effect 1: Push TWO hash entries so the user lives at index 2.
+  // Samsung Internet kills the PWA without firing JS events when back hits index 0.
+  // By having index 1 = #guard, pressing back from #app goes to #guard (NOT index 0).
   useEffect(() => {
-    // 1. Use DIRECT hash assignment (not pushState) — this performs a real navigation
-    // that Samsung Internet's PWA engine must respect.
-    const lockHash = () => {
-      if (!isTrappedRef.current && window.location.hash !== '#app') {
-        window.location.hash = 'app' // Direct assignment, NOT pushState
-        isTrappedRef.current = true
-        setDebugInfo('TRAP SET: len=' + window.history.length)
-      }
+    if (!isTrappedRef.current) {
+      window.location.hash = 'guard' // index 1
+      window.location.hash = 'app'   // index 2 — user lives here
+      isTrappedRef.current = true
+      setDebugInfo('TRAP SET: len=' + window.history.length)
+      // Wait for the initial hashchange events to settle before arming the handler
+      setTimeout(() => { readyRef.current = true }, 300)
+    } else {
+      readyRef.current = true
     }
 
-    lockHash()
-
-    // 2. Also ensure interaction lock in case PWA ignores on-mount hash changes.
     const onInteract = () => {
-      lockHash()
+      if (!isTrappedRef.current) {
+        window.location.hash = 'guard'
+        window.location.hash = 'app'
+        isTrappedRef.current = true
+        setDebugInfo('TRAP SET (tap): len=' + window.history.length)
+        setTimeout(() => { readyRef.current = true }, 300)
+      }
       window.removeEventListener('click', onInteract, { capture: true })
       window.removeEventListener('touchstart', onInteract, { capture: true })
     }
     window.addEventListener('click', onInteract, { capture: true })
     window.addEventListener('touchstart', onInteract, { capture: true, passive: true })
 
-    // 3. Listen to BOTH popstate and hashchange for maximum compatibility
+    return () => {
+      window.removeEventListener('click', onInteract, { capture: true })
+      window.removeEventListener('touchstart', onInteract, { capture: true })
+    }
+  }, [])
+
+  // Effect 2: Handle back navigation events
+  useEffect(() => {
     const handleBackNavigation = (eventName) => {
-      if (isExitingRef.current) return
+      if (isExitingRef.current || !readyRef.current) return
 
       const currentHash = window.location.hash
       setDebugInfo(eventName + ': hash=' + currentHash + ', len=' + window.history.length)
@@ -97,7 +112,7 @@ export default function App() {
       // Back Button Trap: if hash is no longer #app, user is trying to exit
       if (currentHash !== '#app') {
         setShowExitConfirm(true)
-        // Push hash back to prevent exit
+        // Push #app back so they stay at a safe index
         window.location.hash = 'app'
       }
     }
@@ -108,21 +123,9 @@ export default function App() {
     window.addEventListener('popstate', handlePopState)
     window.addEventListener('hashchange', handleHashChange)
 
-    // Also try beforeunload as a last resort for Samsung Internet
-    const handleBeforeUnload = (e) => {
-      if (!isExitingRef.current) {
-        e.preventDefault()
-        e.returnValue = ''
-      }
-    }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-
     return () => {
       window.removeEventListener('popstate', handlePopState)
       window.removeEventListener('hashchange', handleHashChange)
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-      window.removeEventListener('click', onInteract, { capture: true })
-      window.removeEventListener('touchstart', onInteract, { capture: true })
     }
   }, [editingSessionId])
 
@@ -130,8 +133,9 @@ export default function App() {
     setShowExitConfirm(false)
     isExitingRef.current = true
     window.close()
+    // Go all the way back to index 0 to trigger Samsung's PWA exit
     setTimeout(() => {
-      window.history.go(-2)
+      window.history.go(-(window.history.length - 1))
     }, 100)
   }
 
