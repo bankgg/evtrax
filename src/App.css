@@ -379,7 +379,7 @@ body {
 
 /* ── Media Queries ──────────────────────────────────────── */
 
-.stat-card .ant-statistic-content {
+.stat-card--efficiency .ant-statistic-content {
   white-space: nowrap;
 }
 
@@ -388,22 +388,22 @@ body {
     padding: 8px 12px 24px;
   }
 
-  .stat-card .ant-statistic-title {
+  .stat-card--efficiency .ant-statistic-title {
     font-size: 10px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .stat-card .ant-card-body {
+  .stat-card--efficiency .ant-card-body {
     padding: 12px 8px;
   }
 
-  .stat-card .ant-statistic-content {
+  .stat-card--efficiency .ant-statistic-content {
     font-size: 13px !important;
   }
 
-  .stat-card .ant-statistic-content-value {
+  .stat-card--efficiency .ant-statistic-content-value {
     font-size: 14px !important;
   }
 }

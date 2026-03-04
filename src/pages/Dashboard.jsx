@@ -230,7 +230,7 @@ export default function Dashboard() {
                             <Text className="section-label">Efficiency</Text>
                             <Row gutter={[12, 12]}>
                                 <Col span={8}>
-                                    <Card className="stat-card" size="small">
+                                    <Card className="stat-card stat-card--efficiency" size="small">
                                         <Statistic
                                             title="Distance"
                                             value={stats.totalDistance}
@@ -242,7 +242,7 @@ export default function Dashboard() {
                                     </Card>
                                 </Col>
                                 <Col span={8}>
-                                    <Card className="stat-card stat-card--energy" size="small">
+                                    <Card className="stat-card stat-card--energy stat-card--efficiency" size="small">
                                         <Statistic
                                             title="kWh/100km"
                                             value={stats.efficiency}
@@ -252,7 +252,7 @@ export default function Dashboard() {
                                     </Card>
                                 </Col>
                                 <Col span={8}>
-                                    <Card className="stat-card stat-card--cost" size="small">
+                                    <Card className="stat-card stat-card--cost stat-card--efficiency" size="small">
                                         <Statistic
                                             title="฿/km"
                                             value={stats.costPerKm}
