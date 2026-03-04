@@ -23,8 +23,32 @@ const tabs = [
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [editingSessionId, setEditingSessionId] = useState(null)
+  const [showExitConfirm, setShowExitConfirm] = useState(false)
+  const isTrappedRef = useRef(false)
+  const isExitingRef = useRef(false)
+  const activeTabRef = useRef('dashboard')
+  const [debugInfo, setDebugInfo] = useState('')
+
+  // Keep ref in sync with state
+  useEffect(() => { activeTabRef.current = activeTab }, [activeTab])
+
+  // Samsung Internet PWA ONLY respects pushState called inside React element onClick.
+  // It ignores: hash changes, window-level listeners, mount-time pushState.
+  // This function pushes a two-layer trap (guard + active) via pushState.
+  const ensureTrap = () => {
+    if (!isTrappedRef.current) {
+      window.history.pushState({ guard: true }, '')
+      window.history.pushState({ active: true, tab: activeTabRef.current }, '')
+      isTrappedRef.current = true
+      setDebugInfo('TRAP SET: len=' + window.history.length)
+    }
+  }
+
+  // Called on ANY click inside the app shell — sets the trap on first touch
+  const handleAppClick = () => ensureTrap()
 
   const handleEdit = (sessionId) => {
+    ensureTrap()
     window.history.pushState({ view: 'editSession' }, '')
     setEditingSessionId(sessionId)
     setActiveTab('new')
@@ -47,93 +71,49 @@ export default function App() {
         }
       }
     }
+    ensureTrap()
     setActiveTab(key)
   }
 
-  // --- App Exit Confirmation Logic ---
-  const [showExitConfirm, setShowExitConfirm] = useState(false)
-  const isTrappedRef = useRef(false)
-  const isExitingRef = useRef(false)
-  const readyRef = useRef(false)
-  const [debugInfo, setDebugInfo] = useState('')
-
-  // Effect 1: Push TWO hash entries so the user lives at index 2.
-  // Samsung Internet kills the PWA without firing JS events when back hits index 0.
-  // By having index 1 = #guard, pressing back from #app goes to #guard (NOT index 0).
+  // Handle popstate — the ONLY event listener we need
   useEffect(() => {
-    if (!isTrappedRef.current) {
-      window.location.hash = 'guard' // index 1
-      window.location.hash = 'app'   // index 2 — user lives here
-      isTrappedRef.current = true
-      setDebugInfo('TRAP SET: len=' + window.history.length)
-      // Wait for the initial hashchange events to settle before arming the handler
-      setTimeout(() => { readyRef.current = true }, 300)
-    } else {
-      readyRef.current = true
-    }
+    const handlePopState = (e) => {
+      if (isExitingRef.current) return
 
-    const onInteract = () => {
-      if (!isTrappedRef.current) {
-        window.location.hash = 'guard'
-        window.location.hash = 'app'
-        isTrappedRef.current = true
-        setDebugInfo('TRAP SET (tap): len=' + window.history.length)
-        setTimeout(() => { readyRef.current = true }, 300)
-      }
-      window.removeEventListener('click', onInteract, { capture: true })
-      window.removeEventListener('touchstart', onInteract, { capture: true })
-    }
-    window.addEventListener('click', onInteract, { capture: true })
-    window.addEventListener('touchstart', onInteract, { capture: true, passive: true })
-
-    return () => {
-      window.removeEventListener('click', onInteract, { capture: true })
-      window.removeEventListener('touchstart', onInteract, { capture: true })
-    }
-  }, [])
-
-  // Effect 2: Handle back navigation events
-  useEffect(() => {
-    const handleBackNavigation = (eventName) => {
-      if (isExitingRef.current || !readyRef.current) return
-
-      const currentHash = window.location.hash
-      setDebugInfo(eventName + ': hash=' + currentHash + ', len=' + window.history.length)
+      const s = e.state
+      setDebugInfo('pop: ' + JSON.stringify(s) + ' len=' + window.history.length)
 
       // Handle Edit Session returning
-      if (editingSessionId) {
-        const state = window.history.state
-        if (state?.view !== 'editSession') {
-          setEditingSessionId(null)
-          setActiveTab('history')
-        }
+      if (editingSessionId && s?.view !== 'editSession') {
+        setEditingSessionId(null)
+        setActiveTab('history')
+        return
       }
 
-      // Back Button Trap: if hash is no longer #app, user is trying to exit
-      if (currentHash !== '#app') {
-        setShowExitConfirm(true)
-        // Push #app back so they stay at a safe index
-        window.location.hash = 'app'
-      }
+      // Handle overlay states (like MapPicker) — let the component's own handler deal with it
+      if (s?.overlay) return
+
+      // If we landed on the 'active' layer, user returned from an overlay — safe, do nothing
+      if (s?.active) return
+
+      // If we landed on a view state, it's a forward navigation — do nothing
+      if (s?.view) return
+
+      // We hit the 'guard' layer or null — this is an exit attempt!
+      setShowExitConfirm(true)
+      // Push the active state back to prevent the next back from exiting
+      window.history.pushState({ active: true, tab: activeTabRef.current }, '')
     }
-
-    const handlePopState = () => handleBackNavigation('popstate')
-    const handleHashChange = () => handleBackNavigation('hashchange')
 
     window.addEventListener('popstate', handlePopState)
-    window.addEventListener('hashchange', handleHashChange)
-
-    return () => {
-      window.removeEventListener('popstate', handlePopState)
-      window.removeEventListener('hashchange', handleHashChange)
-    }
+    return () => window.removeEventListener('popstate', handlePopState)
   }, [editingSessionId])
 
   const handleConfirmExit = () => {
     setShowExitConfirm(false)
     isExitingRef.current = true
     window.close()
-    // Go all the way back to index 0 to trigger Samsung's PWA exit
+    // Go all the way to index 0 to trigger Samsung's PWA close
     setTimeout(() => {
       window.history.go(-(window.history.length - 1))
     }, 100)
@@ -178,7 +158,8 @@ export default function App() {
         },
       }}
     >
-      <div className="app-shell">
+      {/* onClick on the shell ensures the pushState trap is set on the FIRST tap */}
+      <div className="app-shell" onClick={handleAppClick}>
         <SyncStatusBar />
         {/* DEBUG: Remove after testing */}
         {debugInfo && (
@@ -227,3 +208,4 @@ export default function App() {
     </ConfigProvider>
   )
 }
+
