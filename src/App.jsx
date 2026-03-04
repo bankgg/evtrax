@@ -112,10 +112,15 @@ export default function App() {
   const handleConfirmExit = () => {
     setShowExitConfirm(false)
     isExitingRef.current = true
-    // Samsung only exits on hardware back at index 0.
-    // We're at the guard layer (index 1). Go back one step to index 0.
-    // Then one more hardware back press will exit the PWA.
-    window.history.back()
+
+    // Strategy 1: Try native window close
+    window.close()
+
+    // Strategy 2: Navigate to about:blank — in a standalone PWA,
+    // this forces the window to show nothing, which should close it.
+    setTimeout(() => {
+      window.location.replace('about:blank')
+    }, 200)
   }
 
   const handleCancelExit = () => {
