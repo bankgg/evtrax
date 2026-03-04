@@ -52,11 +52,31 @@ export default function App() {
   }
 
   // --- App Exit Confirmation Logic ---
+  const trapPushedRef = useRef(false)
+
   useEffect(() => {
     // 1) Push a dummy state so there's always something in history to pop
-    if (!window.history.state?.appExitTrap) {
-      window.history.pushState({ appExitTrap: true }, '')
+    // Chrome/Android requires a user gesture for pushState to act as a proper back-stop.
+    const ensureTrap = () => {
+      if (!trapPushedRef.current) {
+        if (!window.history.state?.appExitTrap) {
+          window.history.pushState({ appExitTrap: true }, '')
+        }
+        trapPushedRef.current = true
+      }
     }
+
+    // Try immediately (works in browser sometimes)
+    ensureTrap()
+
+    // Bind to first interaction to ensure it sticks in Android PWA
+    const onInteract = () => {
+      ensureTrap()
+      window.removeEventListener('click', onInteract)
+      window.removeEventListener('touchstart', onInteract)
+    }
+    window.addEventListener('click', onInteract)
+    window.addEventListener('touchstart', onInteract, { passive: true })
 
     const handlePopState = (e) => {
       // 2) Check if user returned to an internal view (e.g. editSession overlay)
@@ -66,7 +86,7 @@ export default function App() {
 
       // 3) Check if user returned to the trap state (meaning they closed an overlay like mapPicker or editSession)
       if (e.state?.appExitTrap) {
-        if (editingSessionId && e.state?.view !== 'editSession') {
+        if (editingSessionId) {
           setEditingSessionId(null)
           setActiveTab('history')
         }
@@ -74,7 +94,12 @@ export default function App() {
       }
 
       // If we are here, we popped the trap state (user wants to exit the app)
-      if (exitModalRef.current) return // Modal already open
+      trapPushedRef.current = false // reset flag since we left the trap state
+
+      if (exitModalRef.current) {
+        ensureTrap()
+        return
+      }
 
       exitModalRef.current = Modal.confirm({
         title: 'Exit App?',
@@ -84,19 +109,24 @@ export default function App() {
         centered: true,
         onOk: () => {
           exitModalRef.current = null
-          // User confirmed, actually let them exit by going back again
+          // Attempt to naturally close PWA
+          window.close()
           window.history.back()
         },
         onCancel: () => {
           exitModalRef.current = null
           // User canceled, push the trap state back on to prevent exit next time
-          window.history.pushState({ appExitTrap: true }, '')
+          ensureTrap()
         },
       })
     }
 
     window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+      window.removeEventListener('click', onInteract)
+      window.removeEventListener('touchstart', onInteract)
+    }
   }, [editingSessionId])
 
   return (

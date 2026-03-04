@@ -391,11 +391,28 @@ body {
 
 @media (display-mode: standalone), (display-mode: fullscreen) {
   ::-webkit-scrollbar {
-    display: none;
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
   }
+  
   * {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+    -ms-overflow-style: none !important; /* IE and Edge */
+    scrollbar-width: none !important; /* Firefox */
+  }
+
+  html, body {
+    overflow: hidden;
+  }
+
+  .app-content {
+      overflow-y: scroll;
+  }
+
+  .app-content::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
   }
 }
 
