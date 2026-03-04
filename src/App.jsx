@@ -112,16 +112,17 @@ export default function App() {
   const handleConfirmExit = () => {
     setShowExitConfirm(false)
     isExitingRef.current = true
-    // Samsung Internet only exits PWA on hardware back button at index 0.
-    // Navigate to index 0 so the next back press exits naturally.
-    window.history.go(-(window.history.length - 1))
+    // Samsung only exits on hardware back at index 0.
+    // We're at the guard layer (index 1). Go back one step to index 0.
+    // Then one more hardware back press will exit the PWA.
+    window.history.back()
   }
 
   const handleCancelExit = () => {
     setShowExitConfirm(false)
-    // Samsung Internet ignores pushState inside popstate handlers,
-    // so we MUST re-establish the trap from this button's onClick handler.
-    window.history.pushState({ guard: true }, '')
+    // Push ONLY the active state above the current guard.
+    // Since pushState from index 1 discards old forward entries,
+    // history stays flat: [null(0), guard(1), active(2)] — no accumulation.
     window.history.pushState({ active: true, tab: activeTabRef.current }, '')
   }
 
