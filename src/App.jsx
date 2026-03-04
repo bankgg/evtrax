@@ -27,24 +27,19 @@ export default function App() {
   const isTrappedRef = useRef(false)
   const isExitingRef = useRef(false)
   const activeTabRef = useRef('dashboard')
-  const [debugInfo, setDebugInfo] = useState('')
 
-  // Keep ref in sync with state
   useEffect(() => { activeTabRef.current = activeTab }, [activeTab])
 
   // Samsung Internet PWA ONLY respects pushState called inside React element onClick.
-  // It ignores: hash changes, window-level listeners, mount-time pushState.
-  // This function pushes a two-layer trap (guard + active) via pushState.
+  // This pushes a two-layer trap (guard + active) via pushState.
   const ensureTrap = () => {
     if (!isTrappedRef.current) {
       window.history.pushState({ guard: true }, '')
       window.history.pushState({ active: true, tab: activeTabRef.current }, '')
       isTrappedRef.current = true
-      setDebugInfo('TRAP SET: len=' + window.history.length)
     }
   }
 
-  // Called on ANY click inside the app shell — sets the trap on first touch
   const handleAppClick = () => ensureTrap()
 
   const handleEdit = (sessionId) => {
@@ -75,34 +70,24 @@ export default function App() {
     setActiveTab(key)
   }
 
-  // Handle popstate — the ONLY event listener we need
   useEffect(() => {
     const handlePopState = (e) => {
       if (isExitingRef.current) return
 
       const s = e.state
-      setDebugInfo('pop: ' + JSON.stringify(s) + ' len=' + window.history.length)
 
-      // Handle Edit Session returning
       if (editingSessionId && s?.view !== 'editSession') {
         setEditingSessionId(null)
         setActiveTab('history')
         return
       }
 
-      // Handle overlay states (like MapPicker) — let the component's own handler deal with it
       if (s?.overlay) return
-
-      // If we landed on the 'active' layer, user returned from an overlay — safe, do nothing
       if (s?.active) return
-
-      // If we landed on a view state, it's a forward navigation — do nothing
       if (s?.view) return
 
-      // We hit the 'guard' layer or null — this is an exit attempt!
+      // Guard layer or null — exit attempt
       setShowExitConfirm(true)
-      // NOTE: We do NOT pushState here because Samsung Internet ignores pushState inside popstate handlers.
-      // The trap will be re-established from the Cancel button's onClick handler instead.
     }
 
     window.addEventListener('popstate', handlePopState)
@@ -112,24 +97,14 @@ export default function App() {
   const handleConfirmExit = () => {
     setShowExitConfirm(false)
     isExitingRef.current = true
-
-    // Navigate to index 0 first
+    // Navigate to index 0. Samsung Internet only exits PWAs via
+    // hardware back button, so the next back press will close the app.
     window.history.back()
-    // Then try to go past index 0 — Samsung should exit the PWA
-    setTimeout(() => {
-      window.history.back()
-    }, 100)
-    // Last resort: if still alive after 500ms, blank the screen
-    setTimeout(() => {
-      window.location.replace('about:blank')
-    }, 500)
   }
 
   const handleCancelExit = () => {
     setShowExitConfirm(false)
-    // Push ONLY the active state above the current guard.
-    // Since pushState from index 1 discards old forward entries,
-    // history stays flat: [null(0), guard(1), active(2)] — no accumulation.
+    // Re-establish the trap from this button's onClick (Samsung respects this).
     window.history.pushState({ active: true, tab: activeTabRef.current }, '')
   }
 
@@ -168,15 +143,8 @@ export default function App() {
         },
       }}
     >
-      {/* onClick on the shell ensures the pushState trap is set on the FIRST tap */}
       <div className="app-shell" onClick={handleAppClick}>
         <SyncStatusBar />
-        {/* DEBUG: Remove after testing */}
-        {debugInfo && (
-          <div style={{ background: '#ff0', color: '#000', padding: 4, fontSize: 11, textAlign: 'center', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 99999 }}>
-            {debugInfo}
-          </div>
-        )}
 
         <main className="app-content">
           {activeTab === 'dashboard' && <Dashboard />}
@@ -210,10 +178,10 @@ export default function App() {
         onOk={handleConfirmExit}
         onCancel={handleCancelExit}
         okText="Exit"
-        cancelText="Cancel"
+        cancelText="Stay"
         centered
       >
-        <p>Are you sure you want to stop tracking and exit?</p>
+        <p>Press back once more after exiting to close the app.</p>
       </Modal>
     </ConfigProvider>
   )
