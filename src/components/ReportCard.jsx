@@ -94,7 +94,7 @@ export default function ReportCard({ stats, dateRange, hasEfficiency }) {
                         Efficiency
                     </div>
                     <div style={{ display: 'flex', gap: 10 }}>
-                        {statBox('Distance', `${stats.totalDistance.toFixed(0)}`, null, 'km')}
+                        {statBox('Distance', Number(stats.totalDistance.toFixed(0)).toLocaleString(), null, 'km')}
                         {statBox('kWh/100km', stats.efficiency.toFixed(1), blue)}
                         {stats.costPerKm != null && statBox('฿/km', `฿${stats.costPerKm.toFixed(2)}`, green)}
                     </div>
