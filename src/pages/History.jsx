@@ -62,6 +62,21 @@ export default function History({ onEdit }) {
     }, [rangePreset, customRange])
     const [messageApi, contextHolder] = message.useMessage()
 
+    // Build a map of session id → previous session's odometer (chronologically)
+    const prevOdometerMap = useMemo(() => {
+        const map = {}
+        // sessions are sorted by started_at DESC, so iterate in reverse for chronological order
+        const sorted = [...sessions].reverse()
+        let lastOdo = null
+        for (const s of sorted) {
+            if (s.odometer_km != null) {
+                map[s.id] = lastOdo
+                lastOdo = Number(s.odometer_km)
+            }
+        }
+        return map
+    }, [sessions])
+
     const filtered = useMemo(() => {
         let result = sessions
 
@@ -199,11 +214,28 @@ export default function History({ onEdit }) {
                                                 ฿{Number(session.price_per_kwh).toFixed(2)}/kWh
                                             </span>
                                         )}
-                                        {session.odometer_km != null && (
-                                            <span className="stat-chip">
-                                                🚗 {Number(session.odometer_km).toLocaleString()} km
-                                            </span>
-                                        )}
+                                        {session.odometer_km != null && (() => {
+                                            const currentOdo = Number(session.odometer_km)
+                                            const prevOdo = prevOdometerMap[session.id]
+                                            const distance = prevOdo != null ? currentOdo - prevOdo : null
+                                            return (
+                                                <span className="stat-chip">
+                                                    🚗{' '}
+                                                    {prevOdo != null ? (
+                                                        <>
+                                                            {prevOdo.toLocaleString()} → {currentOdo.toLocaleString()} km
+                                                            {distance > 0 && (
+                                                                <span style={{ opacity: 0.65, marginLeft: 4 }}>
+                                                                    · {distance.toLocaleString()} km
+                                                                </span>
+                                                            )}
+                                                        </>
+                                                    ) : (
+                                                        <>{currentOdo.toLocaleString()} km</>
+                                                    )}
+                                                </span>
+                                            )
+                                        })()}
                                         {hasDuration && (
                                             <span className="stat-chip">
                                                 ⏱ {formatDuration(session.started_at, session.ended_at)}
