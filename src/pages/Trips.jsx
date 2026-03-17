@@ -44,6 +44,7 @@ export default function Trips() {
         started_at: new Date().toISOString(),
         ended_at: null,
         start_odometer: values.startOdometer ?? null,
+        start_battery_pct: values.startBatteryPct ?? null,
       })
       messageApi.success(`${values.tripName} started!`)
       refresh()
@@ -58,10 +59,10 @@ export default function Trips() {
     try {
       await syncManager.updateTrip(selectedTrip.id, {
         ended_at: new Date().toISOString(),
+        end_odometer: values.finalOdometer ?? null,
+        end_battery_pct: values.endBatteryPct ?? null,
       })
 
-      // If final odometer was provided, we could create a dummy session or store it elsewhere
-      // For now, we'll just end the trip
       messageApi.success(`${selectedTrip.name} ended!`)
       refresh()
       setEndModalVisible(false)
@@ -86,11 +87,13 @@ export default function Trips() {
 
   const handleDeleteTrip = async (tripId) => {
     try {
-      // First unassign all sessions from this trip
+      // First unassign all sessions from this trip and queue for sync
       const sessions = await db.sessions.where('trip_id').equals(tripId).toArray()
       for (const session of sessions) {
-        await db.sessions.update(session.id, { trip_id: null })
+        // Use syncManager to ensure updates are queued for sync
+        await syncManager.updateSession(session.id, { trip_id: null })
       }
+
       // Then delete the trip
       await syncManager.deleteTrip(tripId)
       messageApi.success('Trip deleted')
@@ -144,34 +147,36 @@ export default function Trips() {
           variant="borderless"
         >
           <div style={{ color: 'white' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <Title level={4} style={{ margin: 0, color: 'white' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+              <Title level={4} style={{ margin: 0, color: 'white', flex: 1, minWidth: 0 }}>
                 {activeTrip.name}
               </Title>
               <Badge
                 count="Active"
-                style={{ backgroundColor: 'rgba(255,255,255,0.3)', color: 'white' }}
+                style={{ backgroundColor: 'rgba(255,255,255,0.3)', color: 'white', flexShrink: 0 }}
               />
             </div>
             <Text style={{ color: 'rgba(255,255,255,0.9)' }}>
               Started: {formatDate(activeTrip.started_at)}
             </Text>
             <div style={{ marginTop: 12 }}>
-              <Space>
+              <Space size="small">
                 <Button
                   icon={<EyeOutlined />}
                   onClick={() => handleShowStats(activeTrip)}
+                  size="small"
                   style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderColor: 'rgba(255,255,255,0.3)', color: 'white' }}
                 >
-                  View Stats
+                  Stats
                 </Button>
                 <Button
                   icon={<StopOutlined />}
                   onClick={() => handleEndTripClick(activeTrip)}
                   danger
+                  size="small"
                   style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderColor: 'rgba(255,255,255,0.3)', color: 'white' }}
                 >
-                  End Trip
+                  End
                 </Button>
               </Space>
             </div>
@@ -215,9 +220,9 @@ export default function Trips() {
               style={{ background: '#1a1a2e' }}
               variant="borderless"
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                     <Text strong style={{ color: 'var(--text-primary)', fontSize: 16 }}>
                       {trip.name}
                     </Text>
@@ -235,25 +240,23 @@ export default function Trips() {
                     </>
                   )}
                 </div>
-                <Space size="small">
+                <Space size={4}>
                   <Button
-                    type="default"
+                    type="text"
                     icon={<EyeOutlined />}
                     size="small"
                     onClick={() => handleShowStats(trip)}
-                  >
-                    Stats
-                  </Button>
+                    style={{ flexShrink: 0 }}
+                  />
                   {!trip.ended_at && (
                     <Button
-                      type="default"
+                      type="text"
                       icon={<StopOutlined />}
                       size="small"
                       danger
                       onClick={() => handleEndTripClick(trip)}
-                    >
-                      End
-                    </Button>
+                      style={{ flexShrink: 0 }}
+                    />
                   )}
                   <Popconfirm
                     title="Delete this trip?"
@@ -263,10 +266,11 @@ export default function Trips() {
                     cancelText="Cancel"
                   >
                     <Button
-                      type="default"
+                      type="text"
                       icon={<DeleteOutlined />}
                       size="small"
                       danger
+                      style={{ flexShrink: 0 }}
                     />
                   </Popconfirm>
                 </Space>

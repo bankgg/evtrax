@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Card, Statistic, Row, Col, Tag, Empty, Typography, Divider, Spin, Segmented, DatePicker } from 'antd'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import {
@@ -11,6 +11,8 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useSessions } from '../hooks/useSessions'
+import { useTrips } from '../hooks/useTrips'
+import { db } from '../lib/db'
 import ReportModal from '../components/ReportModal'
 
 const { Title, Text } = Typography
@@ -29,10 +31,18 @@ function getDateRange(preset) {
 
 export default function Dashboard() {
     const { sessions, loading } = useSessions()
+    const { trips } = useTrips()
     const [rangePreset, setRangePreset] = useState(() => localStorage.getItem('evtrax_range') || 'Month')
     const [customRange, setCustomRange] = useState(null)
     const [rangeOpen, setRangeOpen] = useState(false)
     const [reportOpen, setReportOpen] = useState(false)
+
+    // Build trips map for efficient lookup
+    const tripsMap = useMemo(() => {
+        const map = new Map()
+        trips.forEach(trip => map.set(trip.id, trip))
+        return map
+    }, [trips])
 
     const handleCustomChange = (dates) => {
         setCustomRange(dates)
@@ -95,39 +105,111 @@ export default function Dashboard() {
         if (!filtered.length) return null
 
         const totalCost = filtered.reduce((sum, s) => sum + (Number(s.total_cost) || 0), 0)
-        const totalEnergy = filtered.reduce((sum, s) => sum + (Number(s.energy_kwh) || 0), 0)
-        const avgCostPerKwh = totalEnergy > 0 ? totalCost / totalEnergy : 0
+        const totalEnergyCharged = filtered.reduce((sum, s) => sum + (Number(s.energy_kwh) || 0), 0)
+        const avgCostPerKwh = totalEnergyCharged > 0 ? totalCost / totalEnergyCharged : 0
         const totalSessions = filtered.length
 
-        // Odometer-derived stats
+        // Odometer-derived stats - account for trip start odometers
         const sessionsWithOdo = filtered.filter((s) => s.odometer_km != null)
         let totalDistance = null
         let efficiency = null
         let costPerKm = null
+        let totalEnergyUsed = null
 
-        if (sessionsWithOdo.length >= 2) {
-            const maxOdo = Math.max(...sessionsWithOdo.map((s) => Number(s.odometer_km)))
-            const minOdo = Math.min(...sessionsWithOdo.map((s) => Number(s.odometer_km)))
-            totalDistance = maxOdo - minOdo
+        const BATTERY_KWH = 58.9
 
-            if (totalDistance > 0) {
-                efficiency = (totalEnergy / totalDistance) * 100
-                if (totalCost > 0) {
-                    costPerKm = totalCost / totalDistance
+        if (sessionsWithOdo.length >= 1) {
+            // Group sessions by trip to calculate accurate distances and battery-aware energy/cost
+            const sessionsByTrip = new Map()
+
+            // First, group sessions by trip_id
+            filtered.forEach(session => {
+                const tripId = session.trip_id
+                if (!sessionsByTrip.has(tripId)) {
+                    sessionsByTrip.set(tripId, [])
+                }
+                sessionsByTrip.get(tripId).push(session)
+            })
+
+            // Calculate distance, energy and cost for each trip group
+            let calculatedDistance = 0
+            let calculatedEnergyUsed = 0
+            let calculatedCostUsed = 0
+
+            for (const [tripId, tripSessions] of sessionsByTrip) {
+                const sessionsWithOdoInTrip = tripSessions.filter((s) => s.odometer_km != null)
+
+                if (sessionsWithOdoInTrip.length === 0) continue
+
+                // Calculate energy and cost for this trip
+                const tripEnergyCharged = tripSessions.reduce((sum, s) => sum + (Number(s.energy_kwh) || 0), 0)
+                const tripCostCharged = tripSessions.reduce((sum, s) => sum + (Number(s.total_cost) || 0), 0)
+                let tripEnergyUsed = tripEnergyCharged // default to charged
+                let tripCostUsed = tripCostCharged // default to charged
+
+                // If trip has battery data, calculate actual energy used and cost used
+                if (tripId && tripsMap.has(tripId)) {
+                    const trip = tripsMap.get(tripId)
+                    if (trip.start_battery_pct != null && trip.end_battery_pct != null) {
+                        const batteryChangePct = Number(trip.end_battery_pct) - Number(trip.start_battery_pct)
+                        const batteryChangeKwh = (batteryChangePct / 100) * BATTERY_KWH
+                        tripEnergyUsed = tripEnergyCharged - batteryChangeKwh
+
+                        // Calculate cost used based on energy used ratio
+                        const avgCostPerKwh = tripEnergyCharged > 0 ? tripCostCharged / tripEnergyCharged : 0
+                        tripCostUsed = tripEnergyUsed > 0 ? tripEnergyUsed * avgCostPerKwh : 0
+                    }
+                }
+
+                calculatedEnergyUsed += tripEnergyUsed
+                calculatedCostUsed += tripCostUsed
+
+                // Calculate distance for this trip
+                if (tripId && tripsMap.has(tripId)) {
+                    // Use trip's odometers
+                    const trip = tripsMap.get(tripId)
+                    const startOdo = trip.start_odometer && trip.start_odometer > 0 ? Number(trip.start_odometer) : null
+                    const endOdo = trip.end_odometer && trip.end_odometer > 0 ? Number(trip.end_odometer) : null
+
+                    if (startOdo != null && endOdo != null && endOdo > startOdo) {
+                        calculatedDistance += (endOdo - startOdo)
+                    } else if (startOdo != null) {
+                        // Use max from sessions if no end odometer
+                        const maxOdo = Math.max(...sessionsWithOdoInTrip.map((s) => Number(s.odometer_km)))
+                        if (maxOdo > startOdo) {
+                            calculatedDistance += (maxOdo - startOdo)
+                        }
+                    }
+                } else if (sessionsWithOdoInTrip.length >= 2) {
+                    // No trip - use min/max from sessions
+                    const maxOdo = Math.max(...sessionsWithOdoInTrip.map((s) => Number(s.odometer_km)))
+                    const minOdo = Math.min(...sessionsWithOdoInTrip.map((s) => Number(s.odometer_km)))
+                    if (maxOdo > minOdo) {
+                        calculatedDistance += (maxOdo - minOdo)
+                    }
+                }
+            }
+
+            if (calculatedDistance > 0) {
+                totalDistance = calculatedDistance
+                totalEnergyUsed = calculatedEnergyUsed
+                efficiency = (totalEnergyUsed / totalDistance) * 100
+                if (calculatedCostUsed > 0) {
+                    costPerKm = calculatedCostUsed / totalDistance
                 }
             }
         }
 
         return {
             totalCost,
-            totalEnergy,
+            totalEnergy: totalEnergyUsed || totalEnergyCharged,
             avgCostPerKwh,
             totalSessions,
             totalDistance,
             efficiency,
             costPerKm,
         }
-    }, [filtered])
+    }, [filtered, tripsMap])
 
     const recentSessions = filtered.slice(0, 5)
 

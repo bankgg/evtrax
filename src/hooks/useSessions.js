@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { db } from '../lib/db'
+import { db, ensureDatabaseOpen } from '../lib/db'
 import { syncManager } from '../lib/syncManager'
 
 export function useSessions() {
@@ -9,6 +9,7 @@ export function useSessions() {
 
   const refresh = useCallback(async () => {
     try {
+      await ensureDatabaseOpen()
       const all = await db.sessions.orderBy('started_at').reverse().toArray()
       setSessions(all)
       const count = await syncManager.getPendingCount()

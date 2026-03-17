@@ -37,6 +37,7 @@ export default function StartTripModal({ visible, onClose, onStart }) {
         initialValues={{
           tripName: '',
           startOdometer: null,
+          startBatteryPct: null,
         }}
       >
         <Form.Item
@@ -61,6 +62,21 @@ export default function StartTripModal({ visible, onClose, onStart }) {
             min={0}
             step={1}
             placeholder="e.g. 12500"
+            style={{ width: '100%' }}
+            size="large"
+          />
+        </Form.Item>
+
+        <Form.Item
+          name="startBatteryPct"
+          label="Starting Battery Level (%)"
+          extra="Optional: Record starting battery percentage for accurate energy tracking"
+        >
+          <InputNumber
+            min={0}
+            max={100}
+            step={1}
+            placeholder="e.g. 80"
             style={{ width: '100%' }}
             size="large"
           />

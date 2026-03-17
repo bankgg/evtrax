@@ -128,6 +128,7 @@ export default function EndTripModal({ visible, onClose, onEnd, trip, stats }) {
           onFinish={handleSubmit}
           initialValues={{
             finalOdometer: null,
+            endBatteryPct: null,
           }}
         >
           <Form.Item
@@ -139,6 +140,21 @@ export default function EndTripModal({ visible, onClose, onEnd, trip, stats }) {
               min={0}
               step={1}
               placeholder="e.g. 13150"
+              style={{ width: '100%' }}
+              size="large"
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="endBatteryPct"
+            label="Ending Battery Level (%)"
+            extra="Optional: Record ending battery percentage for accurate energy tracking"
+          >
+            <InputNumber
+              min={0}
+              max={100}
+              step={1}
+              placeholder="e.g. 30"
               style={{ width: '100%' }}
               size="large"
             />

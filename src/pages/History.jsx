@@ -238,24 +238,28 @@ export default function History({ onEdit }) {
                                     </div>
 
                                     <div className="history-card-stats">
-                                        {session.energy_kwh != null && (
-                                            <span className="stat-chip">
-                                                ⚡ {Number(session.energy_kwh).toFixed(1)} kWh
-                                            </span>
-                                        )}
                                         {session.total_cost != null && (
                                             <span className="stat-chip stat-chip--cost">
-                                                ฿{Number(session.total_cost).toFixed(2)}
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                    <span style={{ lineHeight: 1 }}>฿</span>
+                                                    <span style={{ lineHeight: 1 }}>{Number(session.total_cost).toFixed(2)}</span>
+                                                </span>
                                             </span>
                                         )}
                                         {session.start_soc_pct != null && session.end_soc_pct != null && (
                                             <span className="stat-chip">
-                                                🔋 {session.start_soc_pct}% → {session.end_soc_pct}%
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                    <span style={{ lineHeight: 1 }}>🔋</span>
+                                                    <span style={{ lineHeight: 1 }}>{session.start_soc_pct}% → {session.end_soc_pct}%</span>
+                                                </span>
                                             </span>
                                         )}
                                         {session.price_per_kwh != null && (
                                             <span className="stat-chip">
-                                                ฿{Number(session.price_per_kwh).toFixed(2)}/kWh
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                    <span style={{ lineHeight: 1 }}>฿</span>
+                                                    <span style={{ lineHeight: 1 }}>{Number(session.price_per_kwh).toFixed(2)}/kWh</span>
+                                                </span>
                                             </span>
                                         )}
                                         {session.odometer_km != null && (() => {
@@ -264,25 +268,30 @@ export default function History({ onEdit }) {
                                             const distance = prevOdo != null ? currentOdo - prevOdo : null
                                             return (
                                                 <span className="stat-chip">
-                                                    🚗{' '}
-                                                    {prevOdo != null ? (
-                                                        <>
-                                                            {prevOdo.toLocaleString()} → {currentOdo.toLocaleString()} km
-                                                            {distance > 0 && (
-                                                                <span style={{ opacity: 0.65, marginLeft: 4 }}>
-                                                                    · {distance.toLocaleString()} km
-                                                                </span>
-                                                            )}
-                                                        </>
-                                                    ) : (
-                                                        <>{currentOdo.toLocaleString()} km</>
-                                                    )}
+                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                        <span style={{ lineHeight: 1 }}>🚗</span>
+                                                        {prevOdo != null ? (
+                                                            <>
+                                                                <span style={{ lineHeight: 1 }}>{prevOdo.toLocaleString()} → {currentOdo.toLocaleString()} km</span>
+                                                                {distance > 0 && (
+                                                                    <span style={{ opacity: 0.65, lineHeight: 1 }}>
+                                                                        · {distance.toLocaleString()} km
+                                                                    </span>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <span style={{ lineHeight: 1 }}>{currentOdo.toLocaleString()} km</span>
+                                                        )}
+                                                    </span>
                                                 </span>
                                             )
                                         })()}
                                         {hasDuration && (
                                             <span className="stat-chip">
-                                                ⏱ {formatDuration(session.started_at, session.ended_at)}
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                    <span style={{ lineHeight: 1 }}>⏱</span>
+                                                    <span style={{ lineHeight: 1 }}>{formatDuration(session.started_at, session.ended_at)}</span>
+                                                </span>
                                             </span>
                                         )}
                                     </div>

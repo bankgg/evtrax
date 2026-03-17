@@ -325,7 +325,7 @@ html, body {
   align-items: center;
   font-size: 12px;
   font-weight: 500;
-  padding: 2px 8px;
+  padding: 5px 8px;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 8px;
   color: var(--text-secondary);

@@ -1,4 +1,4 @@
-import { db } from './db'
+import { db, ensureDatabaseOpen } from './db'
 
 class TripManager {
   /**
@@ -34,6 +34,7 @@ class TripManager {
    * @returns {Promise<Object|null>} The active trip or null
    */
   async getActiveTrip() {
+    await ensureDatabaseOpen()
     const allTrips = await db.trips.toArray()
     const activeTrips = allTrips.filter((trip) => trip.ended_at === null)
     return activeTrips.length > 0 ? activeTrips[0] : null
@@ -45,6 +46,7 @@ class TripManager {
    * @returns {Promise<Object>} Trip with sessions array
    */
   async getTripWithSessions(tripId) {
+    await ensureDatabaseOpen()
     const trip = await db.trips.get(tripId)
     if (!trip) return null
 
@@ -55,26 +57,56 @@ class TripManager {
   /**
    * Calculate trip statistics
    * @param {number} tripId - The trip ID
-   * @returns {Promise<Object>} Statistics object
+   * @returns {Promise<Object>} Statistics object with dual metrics (charged vs used)
    */
   async calculateTripStats(tripId) {
+    await ensureDatabaseOpen()
     const trip = await db.trips.get(tripId)
     const sessions = await db.sessions.where('trip_id').equals(tripId).toArray()
+
+    // Battery capacity constant
+    const BATTERY_KWH = 58.9
 
     if (!sessions || sessions.length === 0) {
       return {
         totalCost: 0,
         totalEnergy: 0,
+        energyCharged: 0,
+        costCharged: 0,
+        energyUsed: null,
+        costUsed: null,
         totalDistance: null,
         efficiency: null,
         costPerKm: null,
         sessionCount: 0,
+        batteryChangePct: null,
+        batteryChangeKwh: null,
+        avgCostPerKwh: null,
+        hasBatteryData: false,
       }
     }
 
-    const totalCost = sessions.reduce((sum, s) => sum + (Number(s.total_cost) || 0), 0)
-    const totalEnergy = sessions.reduce((sum, s) => sum + (Number(s.energy_kwh) || 0), 0)
+    // Charged metrics (from all sessions)
+    const energyCharged = sessions.reduce((sum, s) => sum + (Number(s.energy_kwh) || 0), 0)
+    const costCharged = sessions.reduce((sum, s) => sum + (Number(s.total_cost) || 0), 0)
     const sessionCount = sessions.length
+
+    // Battery-aware metrics
+    const hasBatteryData = trip?.start_battery_pct != null && trip?.end_battery_pct != null
+
+    let energyUsed = null
+    let costUsed = null
+    let batteryChangePct = null
+    let batteryChangeKwh = null
+
+    if (hasBatteryData) {
+      batteryChangePct = Number(trip.end_battery_pct) - Number(trip.start_battery_pct)
+      batteryChangeKwh = (batteryChangePct / 100) * BATTERY_KWH
+      energyUsed = energyCharged - batteryChangeKwh
+
+      const avgCostPerKwh = energyCharged > 0 ? costCharged / energyCharged : 0
+      costUsed = energyUsed > 0 ? energyUsed * avgCostPerKwh : 0
+    }
 
     // Odometer-derived stats
     const sessionsWithOdo = sessions.filter((s) => s.odometer_km != null && s.odometer_km > 0)
@@ -82,36 +114,59 @@ class TripManager {
     let efficiency = null
     let costPerKm = null
 
-    // Use start odometer if available, otherwise use min from sessions
+    // Use trip odometers if available, otherwise use session odometers
     let minOdo = trip?.start_odometer && trip.start_odometer > 0 ? Number(trip.start_odometer) : null
-    let maxOdo = null
+    let maxOdo = trip?.end_odometer && trip.end_odometer > 0 ? Number(trip.end_odometer) : null
 
-    if (sessionsWithOdo.length > 0) {
+    // Fall back to session odometers if trip odometers not available
+    if (maxOdo === null && sessionsWithOdo.length > 0) {
       maxOdo = Math.max(...sessionsWithOdo.map((s) => Number(s.odometer_km)))
       if (minOdo === null) {
         minOdo = Math.min(...sessionsWithOdo.map((s) => Number(s.odometer_km)))
       }
+    }
 
-      // Only calculate distance if we have a valid max and min
-      if (maxOdo !== null && minOdo !== null && maxOdo > minOdo) {
-        totalDistance = maxOdo - minOdo
+    // Only calculate distance if we have a valid max and min
+    if (maxOdo !== null && minOdo !== null && maxOdo > minOdo) {
+      totalDistance = maxOdo - minOdo
 
-        if (totalDistance > 0) {
-          efficiency = totalEnergy > 0 ? (totalEnergy / totalDistance) * 100 : null
-          if (totalCost > 0) {
-            costPerKm = totalCost / totalDistance
-          }
+      if (totalDistance > 0) {
+        // Use energyUsed when available for efficiency, otherwise fall back to energyCharged
+        const energyForEfficiency = energyUsed || energyCharged
+        efficiency = energyForEfficiency > 0 ? (energyForEfficiency / totalDistance) * 100 : null
+
+        // Use costUsed when available for costPerKm, otherwise fall back to costCharged
+        const costForCalculation = costUsed || costCharged
+        if (costForCalculation > 0) {
+          costPerKm = costForCalculation / totalDistance
         }
       }
     }
 
+    const avgCostPerKwh = energyCharged > 0 ? costCharged / energyCharged : null
+
     return {
-      totalCost,
-      totalEnergy,
+      // Legacy metrics (for backward compatibility)
+      totalCost: costCharged,
+      totalEnergy: energyCharged,
+
+      // New dual metrics
+      energyCharged,
+      costCharged,
+      energyUsed,
+      costUsed,
+
+      // Existing metrics (now using used energy when available)
       totalDistance,
       efficiency,
       costPerKm,
       sessionCount,
+
+      // New metadata
+      batteryChangePct,
+      batteryChangeKwh,
+      avgCostPerKwh,
+      hasBatteryData,
     }
   }
 
@@ -164,6 +219,7 @@ class TripManager {
    * @returns {Promise<Array>} Array of all trips
    */
   async getAllTrips() {
+    await ensureDatabaseOpen()
     return await db.trips.orderBy('started_at').reverse().toArray()
   }
 
@@ -173,6 +229,7 @@ class TripManager {
    * @returns {Promise<Object|null>} The trip or null
    */
   async getTrip(tripId) {
+    await ensureDatabaseOpen()
     return await db.trips.get(tripId)
   }
 }
