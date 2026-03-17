@@ -17,3 +17,14 @@ db.version(3).stores({
   sessions:
     'id, charging_type, started_at, ended_at, location, provider, start_soc_pct, end_soc_pct, energy_kwh, price_per_kwh, total_cost, odometer_km, lat, lng, note, created_at, updated_at',
 })
+
+db.version(4).stores({
+  sessions:
+    'id, charging_type, started_at, ended_at, location, provider, start_soc_pct, end_soc_pct, energy_kwh, price_per_kwh, total_cost, odometer_km, lat, lng, note, created_at, updated_at, trip_id',
+  trips: '++id, name, started_at, ended_at, created_at, updated_at',
+  syncQueue: '++queueId, operation, sessionId, tripId, timestamp',
+})
+
+db.version(5).stores({
+  trips: 'id, name, started_at, ended_at, start_odometer, created_at, updated_at',
+})

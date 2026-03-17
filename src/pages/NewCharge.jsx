@@ -9,6 +9,7 @@ import {
     Typography,
     message,
     Card,
+    Tag,
 } from 'antd'
 import {
     ThunderboltOutlined,
@@ -16,10 +17,12 @@ import {
     EnvironmentOutlined,
     SaveOutlined,
     SyncOutlined,
+    CarOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { syncManager } from '../lib/syncManager'
 import { db } from '../lib/db'
+import { tripManager } from '../lib/tripManager'
 import LocationPicker from '../components/LocationPicker'
 
 const { Title, Text } = Typography
@@ -53,6 +56,7 @@ export default function NewCharge({ editSessionId, onDone }) {
     const [geoCoords, setGeoCoords] = useState(null)
     const [geoStatus, setGeoStatus] = useState('idle') // idle | loading | done | error
     const [showMapPicker, setShowMapPicker] = useState(false)
+    const [activeTrip, setActiveTrip] = useState(null)
 
     const openMapPicker = () => {
         window.history.pushState({ overlay: 'mapPicker' }, '')
@@ -103,6 +107,11 @@ export default function NewCharge({ editSessionId, onDone }) {
         })
     }, [])
 
+    // Load active trip
+    useEffect(() => {
+        tripManager.getActiveTrip().then(setActiveTrip)
+    }, [])
+
     useEffect(() => {
         if (editSessionId) {
             db.sessions.get(editSessionId).then((session) => {
@@ -143,6 +152,7 @@ export default function NewCharge({ editSessionId, onDone }) {
                 lat: geoCoords?.lat ?? null,
                 lng: geoCoords?.lng ?? null,
                 note: values.note || null,
+                trip_id: activeTrip?.id || null,
             }
 
             // Auto-calculate energy if both SoC are provided and energy is not
@@ -194,6 +204,29 @@ export default function NewCharge({ editSessionId, onDone }) {
                         {isEditing ? '✏️ Edit Session' : '⚡ New Charge'}
                     </Title>
                 </div>
+
+                {/* Active Trip Indicator */}
+                {activeTrip && !isEditing && (
+                    <Card
+                        size="small"
+                        style={{
+                            marginBottom: 16,
+                            background: 'linear-gradient(135deg, rgba(0, 185, 107, 0.1) 0%, rgba(0, 143, 84, 0.1) 100%)',
+                            borderColor: '#00b96b',
+                        }}
+                        styles={{ body: { padding: '8px 12px' } }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <CarOutlined style={{ color: '#00b96b' }} />
+                            <Text style={{ color: 'var(--text-primary)' }}>
+                                Will be added to{' '}
+                                <Tag color="green" style={{ margin: 0 }}>
+                                    {activeTrip.name}
+                                </Tag>
+                            </Text>
+                        </div>
+                    </Card>
+                )}
 
                 <Form
                     form={form}

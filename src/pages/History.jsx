@@ -1,16 +1,19 @@
-import { useState, useMemo } from 'react'
-import { Tag, Typography, Empty, Input, Button, Popconfirm, Spin, Segmented, DatePicker, message } from 'antd'
+import { useState, useMemo, useEffect } from 'react'
+import { Tag, Typography, Empty, Input, Button, Popconfirm, Spin, Segmented, DatePicker, message, Select } from 'antd'
 import {
     SearchOutlined,
     DeleteOutlined,
     EditOutlined,
     CheckCircleOutlined,
     ClockCircleOutlined,
+    CarOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import duration from 'dayjs/plugin/duration'
 import { useSessions } from '../hooks/useSessions'
+import { useTrips } from '../hooks/useTrips'
 import { syncManager } from '../lib/syncManager'
+import { db } from '../lib/db'
 
 dayjs.extend(duration)
 
@@ -39,10 +42,13 @@ function getDateRange(preset) {
 
 export default function History({ onEdit }) {
     const { sessions, loading } = useSessions()
+    const { trips } = useTrips()
     const [search, setSearch] = useState('')
     const [rangePreset, setRangePreset] = useState(() => localStorage.getItem('evtrax_range') || 'Month')
     const [customRange, setCustomRange] = useState(null)
     const [rangeOpen, setRangeOpen] = useState(false)
+    const [tripFilter, setTripFilter] = useState(null)
+    const [tripsMap, setTripsMap] = useState(new Map())
 
     const handleCustomChange = (dates) => {
         setCustomRange(dates)
@@ -77,6 +83,13 @@ export default function History({ onEdit }) {
         return map
     }, [sessions])
 
+    // Build trips map for easy lookup
+    useEffect(() => {
+        const map = new Map()
+        trips.forEach(trip => map.set(trip.id, trip))
+        setTripsMap(map)
+    }, [trips])
+
     const filtered = useMemo(() => {
         let result = sessions
 
@@ -87,6 +100,15 @@ export default function History({ onEdit }) {
                 const d = dayjs(s.started_at)
                 return d.isAfter(start.startOf('day')) && d.isBefore(end.endOf('day'))
             })
+        }
+
+        // Trip filter
+        if (tripFilter !== null) {
+            if (tripFilter === 'unassigned') {
+                result = result.filter((s) => !s.trip_id)
+            } else {
+                result = result.filter((s) => s.trip_id === tripFilter)
+            }
         }
 
         // Text search filter
@@ -101,7 +123,7 @@ export default function History({ onEdit }) {
         }
 
         return result
-    }, [sessions, dateRange, search])
+    }, [sessions, dateRange, search, tripFilter])
 
     const handleDelete = async (id) => {
         await syncManager.deleteSession(id)
@@ -148,6 +170,19 @@ export default function History({ onEdit }) {
                 className="search-input"
             />
 
+            <Select
+                placeholder="Filter by trip"
+                value={tripFilter}
+                onChange={setTripFilter}
+                allowClear
+                size="large"
+                style={{ width: '100%', marginBottom: 8 }}
+                options={[
+                    { value: 'unassigned', label: 'Unassigned' },
+                    ...trips.map(trip => ({ value: trip.id, label: trip.name })),
+                ]}
+            />
+
             {loading ? (
                 <div style={{ textAlign: 'center', paddingTop: 48 }}>
                     <Spin size="large" />
@@ -170,6 +205,15 @@ export default function History({ onEdit }) {
                                             >
                                                 {session.charging_type === 'dc' ? '⚡ DC' : '🏠 AC'}
                                             </Tag>
+                                            {session.trip_id && tripsMap.has(session.trip_id) && (
+                                                <Tag
+                                                    icon={<CarOutlined />}
+                                                    color="purple"
+                                                    style={{ fontWeight: 500, fontSize: 12 }}
+                                                >
+                                                    {tripsMap.get(session.trip_id)?.name}
+                                                </Tag>
+                                            )}
                                             {isComplete ? (
                                                 <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 12 }} />
                                             ) : (
