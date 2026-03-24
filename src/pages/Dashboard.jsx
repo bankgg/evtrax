@@ -73,25 +73,36 @@ export default function Dashboard() {
     const chartData = useMemo(() => {
         const sorted = [...sessions].sort((a, b) => new Date(a.started_at) - new Date(b.started_at))
         const data = []
-        let prevOdo = null
 
-        sorted.forEach((s) => {
-            const currentOdo = Number(s.odometer_km)
-            const energy = Number(s.energy_kwh)
+        for (let i = 1; i < sorted.length; i++) {
+            const prevSession = sorted[i - 1]
+            const currSession = sorted[i]
 
-            if (currentOdo > 0 && energy > 0) {
-                if (prevOdo != null && currentOdo > prevOdo) {
-                    const distance = currentOdo - prevOdo
-                    const efficiency = (energy / distance) * 100
-                    data.push({
-                        date: s.started_at,
-                        efficiency: Number(efficiency.toFixed(1)),
-                        formattedDate: dayjs(s.started_at).format('MMM D'),
-                    })
+            const prevOdo = Number(prevSession.odometer_km)
+            const currOdo = Number(currSession.odometer_km)
+
+            // Calculate distance between sessions
+            if (prevOdo > 0 && currOdo > 0 && currOdo > prevOdo) {
+                const distance = currOdo - prevOdo
+
+                // Calculate energy used from battery drop
+                const prevEndSoc = prevSession.end_soc_pct
+                const currStartSoc = currSession.start_soc_pct
+
+                if (prevEndSoc != null && currStartSoc != null) {
+                    const batteryDrop = Number(prevEndSoc) - Number(currStartSoc)
+                    if (batteryDrop > 0) {
+                        const energyUsed = (batteryDrop / 100) * BATTERY_KWH
+                        const efficiency = (energyUsed / distance) * 100
+                        data.push({
+                            date: currSession.started_at,
+                            efficiency: Number(efficiency.toFixed(1)),
+                            formattedDate: dayjs(currSession.started_at).format('MMM D'),
+                        })
+                    }
                 }
-                prevOdo = currentOdo
             }
-        })
+        }
 
         if (!dateRange || !dateRange[0] || !dateRange[1]) return data
         const [start, end] = dateRange
@@ -170,9 +181,13 @@ export default function Dashboard() {
                         const prevSession = sortedSessions[i - 1]
                         const currSession = sortedSessions[i]
 
-                        // Energy used = (prev end battery - curr start battery) × capacity
-                        if (prevSession.end_battery_pct != null && currSession.start_battery_pct != null) {
-                            const batteryDrop = Number(prevSession.end_battery_pct) - Number(currSession.start_battery_pct)
+                        // Sessions use start_soc_pct and end_soc_pct (SoC = State of Charge)
+                        // Energy used = (prev end SoC - curr start SoC) × capacity
+                        const prevEndSoc = prevSession.end_soc_pct
+                        const currStartSoc = currSession.start_soc_pct
+
+                        if (prevEndSoc != null && currStartSoc != null) {
+                            const batteryDrop = Number(prevEndSoc) - Number(currStartSoc)
                             if (batteryDrop > 0) {
                                 energyFromBatteryDrop += (batteryDrop / 100) * BATTERY_KWH
                             }
