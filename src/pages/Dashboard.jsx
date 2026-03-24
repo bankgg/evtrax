@@ -233,7 +233,7 @@ export default function Dashboard() {
             if (calculatedDistance > 0) {
                 totalDistance = calculatedDistance
                 totalEnergyUsed = calculatedEnergyUsed
-                efficiency = (totalEnergyUsed / totalDistance) * 100
+                efficiency = Number(((totalEnergyUsed / totalDistance) * 100).toFixed(1))
                 if (calculatedCostUsed > 0) {
                     costPerKm = calculatedCostUsed / totalDistance
                 }
