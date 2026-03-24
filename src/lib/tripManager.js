@@ -100,9 +100,11 @@ class TripManager {
     let batteryChangeKwh = null
 
     if (hasBatteryData) {
-      batteryChangePct = Number(trip.end_battery_pct) - Number(trip.start_battery_pct)
-      batteryChangeKwh = (batteryChangePct / 100) * BATTERY_KWH
-      energyUsed = energyCharged - batteryChangeKwh
+      // Energy used = battery drop percentage × battery capacity
+      const batteryDropPct = Number(trip.start_battery_pct) - Number(trip.end_battery_pct)
+      energyUsed = (batteryDropPct / 100) * BATTERY_KWH
+      batteryChangePct = -batteryDropPct // For display purposes (negative of drop)
+      batteryChangeKwh = -energyUsed // For display purposes
 
       const avgCostPerKwh = energyCharged > 0 ? costCharged / energyCharged : 0
       costUsed = energyUsed > 0 ? energyUsed * avgCostPerKwh : 0

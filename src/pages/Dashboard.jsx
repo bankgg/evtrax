@@ -147,13 +147,13 @@ export default function Dashboard() {
                 let tripEnergyUsed = tripEnergyCharged // default to charged
                 let tripCostUsed = tripCostCharged // default to charged
 
-                // If trip has battery data, calculate actual energy used and cost used
+                // If trip has battery data, calculate actual energy used from battery drop
                 if (tripId && tripsMap.has(tripId)) {
                     const trip = tripsMap.get(tripId)
                     if (trip.start_battery_pct != null && trip.end_battery_pct != null) {
-                        const batteryChangePct = Number(trip.end_battery_pct) - Number(trip.start_battery_pct)
-                        const batteryChangeKwh = (batteryChangePct / 100) * BATTERY_KWH
-                        tripEnergyUsed = tripEnergyCharged - batteryChangeKwh
+                        // Energy used = battery drop percentage × battery capacity
+                        const batteryDropPct = Number(trip.start_battery_pct) - Number(trip.end_battery_pct)
+                        tripEnergyUsed = (batteryDropPct / 100) * BATTERY_KWH
 
                         // Calculate cost used based on energy used ratio
                         const avgCostPerKwh = tripEnergyCharged > 0 ? tripCostCharged / tripEnergyCharged : 0
