@@ -242,11 +242,11 @@ export default function Dashboard() {
 
         return {
             totalCost,
-            totalEnergy: totalEnergyUsed || totalEnergyCharged,
+            totalEnergy: totalEnergyCharged, // Show total charged energy in summary
             avgCostPerKwh,
             totalSessions,
             totalDistance,
-            efficiency,
+            efficiency, // Efficiency uses battery-drop calculation internally
             costPerKm,
         }
     }, [filtered, tripsMap])
