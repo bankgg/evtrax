@@ -13,6 +13,7 @@ import History from './pages/History'
 import ChargingMap from './pages/ChargingMap'
 import Trips from './pages/Trips'
 import SyncStatusBar from './components/SyncStatusBar'
+import { version } from '../package.json'
 import './App.css'
 
 const tabs = [
@@ -128,6 +129,7 @@ export default function App() {
             </button>
           ))}
         </nav>
+        <div className="version-footer">v{version}</div>
       </div>
     </ConfigProvider>
   )

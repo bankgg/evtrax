@@ -159,6 +159,31 @@ export default function Dashboard() {
                         const avgCostPerKwh = tripEnergyCharged > 0 ? tripCostCharged / tripEnergyCharged : 0
                         tripCostUsed = tripEnergyUsed > 0 ? tripEnergyUsed * avgCostPerKwh : 0
                     }
+                } else {
+                    // No trip assigned - calculate energy used from battery drop between consecutive sessions
+                    const sortedSessions = [...tripSessions].sort((a, b) =>
+                        new Date(a.started_at) - new Date(b.started_at)
+                    )
+
+                    let energyFromBatteryDrop = 0
+                    for (let i = 1; i < sortedSessions.length; i++) {
+                        const prevSession = sortedSessions[i - 1]
+                        const currSession = sortedSessions[i]
+
+                        // Energy used = (prev end battery - curr start battery) × capacity
+                        if (prevSession.end_battery_pct != null && currSession.start_battery_pct != null) {
+                            const batteryDrop = Number(prevSession.end_battery_pct) - Number(currSession.start_battery_pct)
+                            if (batteryDrop > 0) {
+                                energyFromBatteryDrop += (batteryDrop / 100) * BATTERY_KWH
+                            }
+                        }
+                    }
+
+                    if (energyFromBatteryDrop > 0) {
+                        tripEnergyUsed = energyFromBatteryDrop
+                        const avgCostPerKwh = tripEnergyCharged > 0 ? tripCostCharged / tripEnergyCharged : 0
+                        tripCostUsed = tripEnergyUsed * avgCostPerKwh
+                    }
                 }
 
                 calculatedEnergyUsed += tripEnergyUsed
